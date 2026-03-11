@@ -24,9 +24,8 @@ A Discord bot that monitors Upwork for new job postings matching your keywords a
 |---|---|
 | Python 3.11+ | f-strings with `=`, `match` statements used throughout |
 | Google Chrome or Chromium | Required by `nodriver` for token harvesting |
-| Xvfb | For headless Linux servers (`sudo apt install xvfb`). Not needed on Windows 11 — see [WSL2 setup](#-running-on-windows-wsl2) |
+| Xvfb | Required on Linux servers and Windows 10 WSL2 (`sudo apt install xvfb`). Not needed on Windows 11 WSL2 — WSLg provides a display automatically |
 | A Discord bot token | See [setup guide](#1-create-your-discord-bot) below |
-| An Upwork account | Required for the one-time login bootstrap |
 | WSL2 *(Windows only)* | Recommended way to run on Windows — see [WSL2 setup](#-running-on-windows-wsl2) |
 
 ---
@@ -119,22 +118,26 @@ DETAILS_QUERY = """
 
 ---
 
-### 7. Bootstrap (One-Time Login)
+### 7. First Run (Visitor Session Bootstrap)
 
-On the very first run, the bot will open a visible Chrome window and wait for you to log in to Upwork manually. This only happens once — after that, cookies are refreshed automatically in the background.
+The bot does not require an Upwork account. It scrapes Upwork as a visitor using publicly accessible GraphQL endpoints. On first run it launches a headless Chrome browser, navigates to Upwork, passes the Cloudflare challenge automatically, and harvests the visitor tokens that Upwork sets for any browser that loads the search page.
 
 ```bash
 python discordbot.py
 ```
 
-When Chrome opens:
-1. Log in to your Upwork account normally
-2. Complete any CAPTCHA or 2FA if prompted
-3. Once you see your Upwork dashboard, the bot will detect the session automatically and close the browser
+The browser runs invisibly in the background. You will see log output like:
 
-The bot will write your credentials to `config.json` and start the scraper loop.
+```
+[bootstrap] Starting one-time browser session...
+[CF] Challenge passed.
+[browser] Refreshing cookies via hidden browser...
+[refresh] Cookies refreshed — 18 cookies, token=yes.
+```
 
-> **Note:** `config.json` contains sensitive session cookies. Add it to `.gitignore` — it should never be committed.
+Once complete, the bot writes the visitor tokens to `config.json` and starts the scraper loop. This takes around 15–30 seconds on a first run.
+
+> **Note:** `config.json` contains session cookies. Add it to `.gitignore` — it should never be committed.
 
 ---
 
@@ -168,7 +171,7 @@ upwork-job-scraper-bot/
 ├── shutdown.py          # SIGINT/SIGTERM graceful shutdown
 ├── graphql_payloads.py  # Upwork GraphQL query strings (you provide this)
 ├── .env                 # Environment variables (never commit)
-├── config.json          # Auto-generated Upwork session cookies (never commit)
+├── config.json          # Auto-generated visitor session cookies (never commit)
 └── jobs.db              # Auto-generated SQLite database
 ```
 
@@ -215,13 +218,15 @@ Skills: Python, FastAPI, PostgreSQL, Docker, REST APIs
 
 ## ⚙️ How Authentication Works
 
-Upwork is protected by Cloudflare. The bot handles this with two independent layers:
+The bot scrapes Upwork as a **visitor** — no Upwork account is needed. Upwork sets visitor-scoped OAuth2 tokens (`UniversalSearchNuxt_vt`, `visitor_gql_token`) in any browser that loads the search page. The bot harvests and refreshes these automatically.
+
+Upwork is protected by Cloudflare, which the bot handles with two independent layers:
 
 **Fast refresh (every 25 minutes):**
 `curl_cffi` hits the Upwork homepage using a Chrome-impersonating TLS fingerprint, extracting fresh CF clearance cookies without spinning up a browser.
 
 **Deep refresh (every 11 hours):**
-`nodriver` launches a real, unmodified Chrome binary under an Xvfb virtual display. It navigates to Upwork, passes any CF challenge, and extracts OAuth2 tokens from localStorage and cookies. The browser is closed immediately after.
+`nodriver` launches a real, unmodified Chrome binary under an Xvfb virtual display. It navigates to Upwork, passes any CF challenge, loads the job search page to trigger visitor token generation, then extracts those tokens and writes them to `config.json`. The browser is closed immediately after.
 
 If a request returns a 401 or 403, the bot triggers an immediate refresh and retries automatically.
 
@@ -347,15 +352,23 @@ Same as the Linux setup — see [step 6 above](#6-create-graphql_payloadspy).
 
 ---
 
-### Step 7 — Bootstrap (One-Time Login)
+### Step 7 — First Run
 
 ```bash
 python3 discordbot.py
 ```
 
-On **Windows 11**, Chrome will open visibly in a window on your desktop (WSLg handles the display automatically). On **Windows 10**, Chrome runs headlessly since there is no WSLg — the bootstrap will still complete but you may need to have your Upwork session already active in a regular browser so cookies can be harvested.
+The bot launches a headless Chrome browser under Xvfb, navigates to Upwork, passes the Cloudflare challenge automatically, and collects the visitor tokens Upwork sets for any browser that loads the search page. No Upwork account or login is required.
 
-Log in to Upwork when the Chrome window appears, complete any 2FA, and wait for the bot to confirm it detected the session.
+You will see output like:
+
+```
+[browser] Launching Chrome on Xvfb :870 (X11 forced, invisible)
+[CF] Challenge passed.
+[refresh] Cookies refreshed — 18 cookies, token=yes.
+```
+
+The whole process takes around 15–30 seconds. Once complete the bot starts the scraper loop automatically.
 
 ---
 
@@ -486,12 +499,13 @@ The bot creates `jobs.db` automatically. It contains three tables:
 
 **"Bootstrap failed" on startup**
 - Make sure Chrome/Chromium is installed and accessible in `PATH`
-- On Linux, ensure Xvfb is installed (`sudo apt install xvfb`)
+- On Linux and Windows 10 WSL2, ensure Xvfb is installed (`sudo apt install xvfb`)
+- Check that outbound HTTPS to `upwork.com` is not being blocked by a firewall
 - Delete `config.json` and rerun to trigger a fresh bootstrap
 
 **401/403 errors in logs**
-- This is normal occasionally — the bot handles these by refreshing cookies automatically
-- If they persist for more than one cycle, delete `config.json` and restart to force a new bootstrap
+- This is normal occasionally — the bot handles these by refreshing visitor tokens automatically
+- If they persist for more than one cycle, delete `config.json` and restart to force a fresh token harvest
 
 **High memory usage warning (>500 MB)**
 - The nodriver browser is closed immediately after each token refresh, so this shouldn't be a browser leak
