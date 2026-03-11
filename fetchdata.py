@@ -7,6 +7,7 @@ from curl_cffi import CurlError
 from database import is_job_posted
 from graphql_payloads import  SEARCH_QUERY, DETAILS_QUERY
 from database import log
+from helpers import clean_text
 
 GRAPHQL_URL = "https://www.upwork.com/api/graphql/v1"
 
@@ -151,74 +152,7 @@ def fetch_jobs(query: str, count: int = 10, offset: int = 0) -> list:
     msg = f"[fetch_jobs] Session type: {session_type} for query '{query}'"
     logger.info(msg); _log("INFO", msg)
 
-    # if logged_in:
-    #     result = _fetch_jobs_user(cookies, headers, query, count, offset)
-    #     if result is not None:
-    #         return result
-    #     logger.warning("[fetch_jobs] User search failed, falling back to visitor search.")
-
     return _fetch_jobs_visitor(cookies, headers, query, count, offset)
-
-
-# def _fetch_jobs_user(cookies, headers, query, count, offset) -> list | None:
-#     """
-#     Try logged-in user search. Returns list on success, None on permission error.
-#     """
-#     token = _find_bearer_token(cookies, for_search=True)
-#     org_uid = cookies.get("current_organization_uid", "")
-#
-#     request_headers = _build_headers(
-#         cookies, token,
-#         referer=f"https://www.upwork.com/nx/search/jobs/?q={query}",
-#     )
-#     if org_uid:
-#         request_headers["x-upwork-api-tenantid"] = org_uid
-#
-#     payload = {
-#         "query": USER_SEARCH_QUERY,
-#         "variables": {
-#             "requestVariables": {
-#                 "userQuery": query,
-#                 "sort": "recency+desc",
-#                 "highlight": True,
-#                 "paging": {"offset": offset, "count": count},
-#             },
-#         },
-#     }
-#
-#     try:
-#         response = _do_graphql_post(
-#             cookies, request_headers, payload,
-#             {"alias": "userJobSearch"}, label=f"fetch_jobs_user:{query}"
-#         )
-#     except (AuthExpiredError, CurlError):
-#         raise
-#     except Exception:
-#         return None
-#
-#     try:
-#         data = response.json()
-#     except (ValueError, json.JSONDecodeError):
-#         return None
-#
-#     if "errors" in data:
-#         err_msg = data["errors"][0].get("message", "") if data["errors"] else ""
-#         if "permission" in err_msg.lower():
-#             logger.warning(f"[fetch_jobs_user] Permission denied: {err_msg}")
-#             return None
-#         logger.error(f"[fetch_jobs_user] GraphQL error: {err_msg}")
-#         return None
-#
-#     try:
-#         nuxt = data["data"]["search"]["universalSearchNuxt"]
-#         search_root = nuxt["userJobSearchV1"]
-#         results = search_root["results"]
-#         paging  = search_root["paging"]
-#         msg = f"[fetch_jobs_user] Query '{query}': {paging['total']} total, fetched {len(results)}"
-#         logger.info(msg); _log("INFO", msg)
-#         return results
-#     except (KeyError, TypeError):
-#         return None
 
 
 def _fetch_jobs_visitor(cookies, headers, query, count, offset) -> list:
@@ -390,7 +324,7 @@ def fetch_jobs_with_details(query: str, count: int = 10) -> list[dict]:
             enriched.append({"search": job, "details": {}})
             continue
 
-        title = job.get("title", ciphertext)
+        title = clean_text(job.get("title", ciphertext))
         msg   = f"[fetch_jobs_with_details] Fetching details for new job: {title} ({ciphertext})"
         logger.info(msg); _log("INFO", msg)
 
