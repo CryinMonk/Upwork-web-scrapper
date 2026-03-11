@@ -24,9 +24,10 @@ A Discord bot that monitors Upwork for new job postings matching your keywords a
 |---|---|
 | Python 3.11+ | f-strings with `=`, `match` statements used throughout |
 | Google Chrome or Chromium | Required by `nodriver` for token harvesting |
-| Xvfb | Recommended for headless Linux servers (`sudo apt install xvfb`) |
+| Xvfb | For headless Linux servers (`sudo apt install xvfb`). Not needed on Windows — see [WSL2 setup](#-running-on-windows-wsl2) |
 | A Discord bot token | See [setup guide](#1-create-your-discord-bot) below |
 | An Upwork account | Required for the one-time login bootstrap |
+| WSL2 *(Windows only)* | Recommended way to run on Windows — see [WSL2 setup](#-running-on-windows-wsl2) |
 
 ---
 
@@ -259,6 +260,207 @@ sudo systemctl status upwork-bot
 View logs:
 ```bash
 sudo journalctl -u upwork-bot -f
+```
+
+---
+
+## 🪟 Running on Windows (WSL2)
+
+WSL2 is the recommended way to run this bot on Windows. It provides a real Linux environment, so the code runs without any modifications.
+
+### Step 1 — Enable WSL2
+
+Open **PowerShell as Administrator** and run:
+
+```powershell
+wsl --install
+```
+
+This installs WSL2 and Ubuntu automatically. Restart your PC when prompted.
+
+After the restart, Ubuntu will open and ask you to create a Linux username and password. Complete that, then run everything below inside the Ubuntu terminal.
+
+> **Windows 10 users:** If `wsl --install` fails, your Windows 10 version may need a manual WSL2 setup. Run `winver` to check — you need build 19041 or higher. Follow [Microsoft's manual install guide](https://learn.microsoft.com/en-us/windows/wsl/install-manual) if needed.
+
+---
+
+### Step 2 — Install System Dependencies
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y python3 python3-pip git xvfb
+```
+
+Install Google Chrome:
+
+```bash
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt install -y ./google-chrome-stable_current_amd64.deb
+rm google-chrome-stable_current_amd64.deb
+```
+
+Verify Chrome installed correctly:
+
+```bash
+google-chrome --version
+```
+
+---
+
+### Step 3 — Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/upwork-job-scraper-bot.git
+cd upwork-job-scraper-bot
+```
+
+---
+
+### Step 4 — Install Python Dependencies
+
+```bash
+pip install -r requirements.txt --break-system-packages
+```
+
+---
+
+### Step 5 — Create Your .env File
+
+```bash
+nano .env
+```
+
+Paste the following, filling in your Discord token:
+
+```env
+DISCORD_TOKEN=your_discord_bot_token_here
+CHECK_INTERVAL=5
+```
+
+Save with `Ctrl+O`, then exit with `Ctrl+X`.
+
+---
+
+### Step 6 — Create graphql_payloads.py
+
+Same as the Linux setup — see [step 6 above](#6-create-graphql_payloadspy).
+
+---
+
+### Step 7 — Bootstrap (One-Time Login)
+
+```bash
+python3 discordbot.py
+```
+
+On **Windows 11**, Chrome will open visibly in a window on your desktop (WSLg handles the display automatically). On **Windows 10**, Chrome runs headlessly since there is no WSLg — the bootstrap will still complete but you may need to have your Upwork session already active in a regular browser so cookies can be harvested.
+
+Log in to Upwork when the Chrome window appears, complete any 2FA, and wait for the bot to confirm it detected the session.
+
+---
+
+### Step 8 — Keep It Running After Closing the Terminal
+
+WSL2 shuts down when all terminals are closed. Use `screen` to keep the bot alive in the background:
+
+```bash
+sudo apt install -y screen
+screen -S upworkbot
+python3 discordbot.py
+```
+
+Detach from the screen session (bot keeps running):
+
+```
+Ctrl+A  then  D
+```
+
+Reattach later to check on it:
+
+```bash
+screen -r upworkbot
+```
+
+---
+
+### Step 9 — Auto-Start on Windows Boot (Optional)
+
+To have the bot start automatically every time Windows boots, without opening any visible window:
+
+**1.** Create a file called `launch_bot.vbs` anywhere on Windows (e.g. your Desktop):
+
+```vbs
+Set ws = CreateObject("WScript.Shell")
+ws.Run "wsl -d Ubuntu -- bash -c 'cd ~/upwork-job-scraper-bot && screen -dmS upworkbot python3 discordbot.py'", 0, False
+```
+
+**2.** Press `Win+R`, type `shell:startup`, and press Enter.
+
+**3.** Copy `launch_bot.vbs` into the folder that opens.
+
+Windows will now silently launch the bot inside WSL2 on every boot, with no terminal window appearing.
+
+Check that it started after a reboot:
+
+```bash
+# Open Ubuntu terminal and run:
+screen -r upworkbot
+```
+
+---
+
+### WSL2 Troubleshooting
+
+**Chrome crashes immediately**
+
+This usually means `/dev/shm` is too small. The bot already passes `--disable-dev-shm-usage` to Chrome which works around this, but if crashes persist:
+
+```bash
+sudo mount -t tmpfs -o size=512m tmpfs /dev/shm
+```
+
+**"Cannot open display" error**
+
+Xvfb did not start. Check it is installed:
+
+```bash
+which Xvfb
+# if nothing prints:
+sudo apt install -y xvfb
+```
+
+**Bot does not start after Windows reboot**
+
+Open an Ubuntu terminal and check if the screen session exists:
+
+```bash
+screen -ls
+```
+
+If it is not listed, start it manually:
+
+```bash
+cd ~/upwork-job-scraper-bot
+screen -S upworkbot
+python3 discordbot.py
+```
+
+Then detach with `Ctrl+A D`.
+
+**WSL2 keeps shutting down**
+
+WSL2 will shut down if there are no active processes. The `screen` session prevents this as long as the bot is running inside it. If WSL2 still shuts down, add this to `/etc/wsl.conf` inside Ubuntu:
+
+```ini
+[wsl2]
+guiApplications=false
+```
+
+Then restart WSL2 from PowerShell:
+
+```powershell
+wsl --shutdown
+wsl
 ```
 
 ---
