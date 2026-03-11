@@ -24,7 +24,7 @@ A Discord bot that monitors Upwork for new job postings matching your keywords a
 |---|---|
 | Python 3.11+ | f-strings with `=`, `match` statements used throughout |
 | Google Chrome or Chromium | Required by `nodriver` for token harvesting |
-| Xvfb | For headless Linux servers (`sudo apt install xvfb`). Not needed on Windows — see [WSL2 setup](#-running-on-windows-wsl2) |
+| Xvfb | For headless Linux servers (`sudo apt install xvfb`). Not needed on Windows 11 — see [WSL2 setup](#-running-on-windows-wsl2) |
 | A Discord bot token | See [setup guide](#1-create-your-discord-bot) below |
 | An Upwork account | Required for the one-time login bootstrap |
 | WSL2 *(Windows only)* | Recommended way to run on Windows — see [WSL2 setup](#-running-on-windows-wsl2) |
