@@ -1,7 +1,7 @@
 """
 browser_session.py — Undetected Chrome via nodriver.
 
-The browser is used ONLY to harvest cookies/tokens (every ~11 hours).
+The browser is used ONLY to harvest cookies/tokens.
 All actual job scraping is done by curl_cffi in fetchdata.py.
 
 Install:

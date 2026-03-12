@@ -3,7 +3,7 @@ auth_manager.py — Token refresh via headless browser + CF cookies via HTTP.
 
 After browser_session.bootstrap() runs once:
   - CF cookies refreshed every 25 min via curl_cffi (fast, no browser)
-  - Auth token refreshed every 11 hours via nodriver (loads homepage, grabs token)
+  - Auth token refreshed every 2 hours via nodriver (loads homepage, grabs token)
 """
 
 
@@ -17,7 +17,7 @@ from database import log
 
 CONFIG_FILE   = "config.json"
 CF_LIFETIME   = timedelta(minutes=25)
-AUTH_LIFETIME = timedelta(hours=11)
+AUTH_LIFETIME = timedelta(hours=2)
 
 logger             = logging.getLogger("auth_manager")
 _last_cf_refresh   = None
