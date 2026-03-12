@@ -154,13 +154,23 @@ def _stop_xvfb():
 # ── Browser launchers ─────────────────────────────────────────────────────────
 
 def needs_bootstrap() -> bool:
-    """True if config.json is missing or has no cookies."""
+    """True if config.json is missing, has no cookies, or has no visitor token."""
     if not os.path.exists(CONFIG_FILE):
         return True
     try:
         with open(CONFIG_FILE) as f:
             config = json.load(f)
-        return not config.get("COOKIES")
+        cookies = config.get("COOKIES", {})
+        if not cookies:
+            return True
+        # Need at least one visitor/search token to make GraphQL requests
+        visitor_tokens = (
+            "UniversalSearchNuxt_vt",
+            "visitor_gql_token",
+            "oauth2_global_js_token",
+            "visitor_topnav_gql_token",
+        )
+        return not any(cookies.get(t) for t in visitor_tokens)
     except (json.JSONDecodeError, KeyError):
         return True
 
@@ -391,36 +401,28 @@ def _write_config(cookies: dict, token: str | None) -> None:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 async def bootstrap() -> bool:
-    """One-time visible — user must interact."""
+    """
+    Bootstrap visitor session — no login required.
+    Loads the homepage and search page to harvest CF cookies + visitor tokens,
+    identical to refresh_browser_cookies() but used on first run.
+    """
     global _browser
 
-    msg = "[bootstrap] Starting one-time browser login (visible window)..."
+    msg = "[bootstrap] Starting visitor cookie harvest (no login required)..."
     logger.info(msg); _log("INFO", msg)
 
     try:
         _browser = await _launch_browser_hidden()
-        tab = await _browser.get("https://www.upwork.com/ab/account-security/login")
 
+        tab = await _browser.get("https://www.upwork.com/")
         await _wait_for_cloudflare(tab, timeout=60)
+        await asyncio.sleep(3 + random.random() * 2)
 
-        msg = "[bootstrap] Waiting for manual login (up to 5 minutes)..."
+        msg = "[bootstrap] Navigating to search page for visitor tokens..."
         logger.info(msg); _log("INFO", msg)
-
-        for _ in range(300):
-            await asyncio.sleep(1)
-            try:
-                raw = await _browser.cookies.get_all()
-                names = {getattr(c, "name", "") for c in raw}
-                if "user_uid" in names or "master_access_token" in names:
-                    break
-            except Exception:
-                continue
-        else:
-            msg = "[bootstrap] Timed out waiting for login."
-            logger.error(msg); _log("ERROR", msg)
-            return False
-
-        await asyncio.sleep(5)
+        await tab.get("https://www.upwork.com/nx/search/jobs/?q=python&sort=recency")
+        await _wait_for_cloudflare(tab, timeout=30)
+        await asyncio.sleep(5 + random.random() * 3)
 
         cookies, token = await _extract_cookies_and_token(_browser, tab)
         if not cookies:
@@ -440,6 +442,8 @@ async def bootstrap() -> bool:
         return False
     finally:
         await _safe_close()
+        _restore_display()
+        _stop_xvfb()
 
 
 async def refresh_browser_cookies() -> bool:
