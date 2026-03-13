@@ -2,8 +2,8 @@ import sqlite3
 import time
 import logging
 from contextlib import contextmanager
-from json_helper import get_json
-from database_helper import _extract_job_record
+from utilties.json_helper import get_json
+from .database_helper import _extract_job_record
 
 DB_PATH = "jobs.db"
 

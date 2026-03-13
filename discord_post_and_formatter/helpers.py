@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime, timezone
 import discord
-from database import log
+from database.database import log
 
 logger = logging.getLogger("helpers")
 

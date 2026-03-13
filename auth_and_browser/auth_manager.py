@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from curl_cffi import requests as cf_requests
 from curl_cffi import CurlError
-from database import log
+from database.database import log
 
 CONFIG_FILE  = "config.json"
 CF_LIFETIME  = timedelta(minutes=25)

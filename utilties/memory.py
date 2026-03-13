@@ -1,7 +1,7 @@
 import logging
 import psutil
 import os
-from database import log
+from database.database import log
 
 logger = logging.getLogger("memory")
 

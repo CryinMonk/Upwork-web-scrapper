@@ -20,7 +20,7 @@ import subprocess
 import time as _time
 from pathlib import Path
 import nodriver as uc
-from database import log
+from database.database import log
 import importlib.util
 
 CONFIG_FILE = "config.json"

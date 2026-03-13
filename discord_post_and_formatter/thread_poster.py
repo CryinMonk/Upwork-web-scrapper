@@ -1,8 +1,8 @@
 import re
 import logging
 import discord
-from thread_helpers import build_thread_embed
-from database import log
+from discord_post_and_formatter.thread_helpers import build_thread_embed
+from database.database import log
 
 logger = logging.getLogger("thread_poster")
 

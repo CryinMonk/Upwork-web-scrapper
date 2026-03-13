@@ -3,23 +3,23 @@ import asyncio
 import logging
 import sqlite3
 from datetime import datetime, timezone
-from json_helper import get_json
+from utilties.json_helper import get_json
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
-from database import (
+from database.database import (
     init_db, is_job_posted, mark_job_posted, get_active_search_channels,
     cleanup_old_jobs, cleanup_old_logs, log,
 )
-from fetchdata import fetch_jobs_with_details, AuthExpiredError
+from fetch_data.fetchdata import fetch_jobs_with_details, AuthExpiredError
 from curl_cffi import CurlError
-from helpers import build_embed
-from thread_poster import post_job_thread
-from memory import check_memory
-from auth_manager import should_refresh, refresh_cf_cookies
-from browser_session import bootstrap, needs_bootstrap, close_session, refresh_browser_cookies
-from commands import register_commands
+from discord_post_and_formatter.helpers import build_embed
+from discord_post_and_formatter.thread_poster import post_job_thread
+from utilties.memory import check_memory
+from auth_and_browser.auth_manager import should_refresh, refresh_cf_cookies
+from auth_and_browser.browser_session import bootstrap, needs_bootstrap, close_session, refresh_browser_cookies
+from discord_bot_commands.commands import register_commands
 
 
 logging.basicConfig(

@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime
 import discord
-from helpers import clean_text, format_experience_level, format_budget
-from database import log
+from discord_post_and_formatter.helpers import clean_text, format_experience_level, format_budget
+from database.database import log
 
 logger = logging.getLogger("thread_helpers")
 

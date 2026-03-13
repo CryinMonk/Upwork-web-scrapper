@@ -1,11 +1,11 @@
 import logging
 import json
-from json_helper import get_json
+from utilties.json_helper import get_json
 from curl_cffi import requests
 from curl_cffi import CurlError
-from database import is_job_posted
-from graphql_payloads import SEARCH_IDS_QUERY, DETAILS_QUERY
-from database import log
+from database.database import is_job_posted
+from .graphql_payloads import SEARCH_IDS_QUERY, DETAILS_QUERY
+from database.database import log
 
 
 GRAPHQL_URL = "https://www.upwork.com/api/graphql/v1"
@@ -206,7 +206,7 @@ def fetch_jobs_with_details(query: str, count: int = 10) -> list[dict]:
             raise  # Re-raise so discordbot can handle auth refresh
 
         if not details:
-            msg = f"[fetch_jobs_with_details] Empty details for {ciphertext}, skipping."
+            msg = f"[fetch_jobs_with_details] Some of the required details for '{ciphertext}' are missing"
             logger.warning(msg); _log("WARNING", msg)
             continue
 

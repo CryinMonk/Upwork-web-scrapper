@@ -37,7 +37,8 @@
       "testng",
       "jackson",
       "gson",
-      "lombok"
+      "lombok",
+      "java7"
     ]
   },
   "kotlin": {
@@ -924,7 +925,8 @@
       "trello",
       "asana",
       "product-management",
-      "product-owner"
+      "product-owner",
+      "jiras"
     ]
   },
   "accounting": {
@@ -977,7 +979,8 @@
     "aliases": [
       "unknown",
       "pokemon",
-      "entei"
+      "entei",
+      "swicune"
     ]
   },
   "pokemon": {
@@ -996,6 +999,16 @@
     "aliases": [
       "beyblade",
       "g-revolution"
+    ]
+  },
+  "blender": {
+    "channel": "blender",
+    "family": "design",
+    "aliases": [
+      "blender",
+      "3d-models",
+      "3d",
+      "model"
     ]
   }
 }
