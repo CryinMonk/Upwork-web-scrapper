@@ -1,7 +1,8 @@
 """
 browser_session.py — Undetected Chrome via nodriver.
 
-The browser is used ONLY to harvest cookies/tokens.
+The browser is used ONLY to harvest cookies/tokens on first bootstrap or
+when Cloudflare blocks curl_cffi (AuthExpiredError).
 All actual job scraping is done by curl_cffi in fetchdata.py.
 
 Install:
@@ -25,9 +26,9 @@ import importlib.util
 CONFIG_FILE = "config.json"
 logger = logging.getLogger("browser_session")
 
-_browser = None
-_xvfb_proc = None
-_xvfb_display = None
+_browser       = None
+_xvfb_proc     = None
+_xvfb_display  = None
 _original_display = None
 
 
@@ -41,7 +42,7 @@ def _patch_nodriver_encoding():
         if not spec or not spec.submodule_search_locations:
             return
 
-        base = Path(spec.submodule_search_locations[0])
+        base    = Path(spec.submodule_search_locations[0])
         cdp_dir = base / "cdp"
         if not cdp_dir.exists():
             return
@@ -59,7 +60,6 @@ def _patch_nodriver_encoding():
                 text = raw.decode("latin-1")
                 if not text.startswith("# -*- coding"):
                     text = "# -*- coding: utf-8 -*-\n" + text
-
                 py_file.write_bytes(text.encode("utf-8"))
                 logger.info(f"[patch] Fixed encoding in {py_file.name}")
                 patched = True
@@ -74,59 +74,44 @@ def _patch_nodriver_encoding():
                 except OSError:
                     pass
 
-    except Exception as e:
+    except (ImportError, OSError) as e:
         logger.warning(f"[patch] Could not patch nodriver encoding: {e}")
 
 
 _patch_nodriver_encoding()
 
 
-# ── Xvfb management ───────────────────────────────��──────────────────────────
+# ── Xvfb management ───────────────────────────────────────────────────────────
 
 def _start_xvfb() -> str | None:
-    """
-    Start Xvfb virtual display. Returns the display string (e.g. ":870")
-    or None if Xvfb is not available.
-    Does NOT modify os.environ — the display is passed directly to Chrome.
-    """
+    """Start Xvfb. Returns the display string (e.g. ':870') or None if unavailable."""
     global _xvfb_proc, _xvfb_display
 
-    # Already running?
     if _xvfb_proc is not None and _xvfb_proc.poll() is None:
         return _xvfb_display
 
     try:
-        result = subprocess.run(["which", "Xvfb"], capture_output=True)
-        if result.returncode != 0:
-            logger.info("[display] Xvfb not installed — browser will be visible. Install: sudo apt install xvfb")
+        if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:
+            logger.info("[display] Xvfb not installed — browser will be visible.")
             return None
-    except Exception:
+    except OSError:
         return None
 
-    # Try up to 3 display numbers in case one is taken
     for _ in range(3):
         display_num = random.randint(100, 999)
         display_str = f":{display_num}"
-
         try:
             proc = subprocess.Popen(
-                [
-                    "Xvfb", display_str,
-                    "-screen", "0", "1920x1080x24",
-                    "-nolisten", "tcp",
-                    "-ac",
-                ],
+                ["Xvfb", display_str, "-screen", "0", "1920x1080x24", "-nolisten", "tcp", "-ac"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
             _time.sleep(0.5)
-
-            if proc.poll() is None:  # Still running = success
-                _xvfb_proc = proc
-                _xvfb_display = display_str
+            if proc.poll() is None:
+                _xvfb_proc, _xvfb_display = proc, display_str
                 logger.info(f"[display] Xvfb started on {display_str} (pid {proc.pid})")
                 return display_str
-        except Exception as e:
+        except OSError as e:
             logger.debug(f"[display] Xvfb attempt failed: {e}")
 
     logger.warning("[display] Could not start Xvfb after 3 attempts.")
@@ -134,53 +119,33 @@ def _start_xvfb() -> str | None:
 
 
 def _stop_xvfb():
-    """Stop Xvfb process."""
     global _xvfb_proc, _xvfb_display
-
     if _xvfb_proc is not None:
         try:
             _xvfb_proc.terminate()
             _xvfb_proc.wait(timeout=5)
-        except Exception:
+        except OSError:
             try:
                 _xvfb_proc.kill()
-            except Exception:
+            except OSError:
                 pass
         logger.info("[display] Xvfb stopped.")
-        _xvfb_proc = None
-        _xvfb_display = None
+        _xvfb_proc = _xvfb_display = None
 
 
-# ── Browser launchers ─────────────────────────────────────────────────────────
+# ── Browser launcher ──────────────────────────────────────────────────────────
 
-def needs_bootstrap() -> bool:
-    """True if config.json is missing, has no cookies, or has no visitor token."""
-    if not os.path.exists(CONFIG_FILE):
-        return True
-    try:
-        with open(CONFIG_FILE) as f:
-            config = json.load(f)
-        cookies = config.get("COOKIES", {})
-        if not cookies:
-            return True
-        # Need at least one visitor/search token to make GraphQL requests
-        visitor_tokens = (
-            "UniversalSearchNuxt_vt",
-            "visitor_gql_token",
-            "oauth2_global_js_token",
-            "visitor_topnav_gql_token",
-        )
-        return not any(cookies.get(t) for t in visitor_tokens)
-    except (json.JSONDecodeError, KeyError):
-        return True
+BROWSER_ARGS_BASE = [
+    "--no-sandbox",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--lang=en-US,en",
+    "--window-size=1920,1080",
+]
 
 
 async def _launch_browser_hidden():
-    """
-    Launch Chrome invisibly by:
-    1. Starting Xvfb and forcing Chrome to X11 (not Wayland)
-    2. Fallback: --headless=new if no Xvfb
-    """
     global _original_display
 
     display = _start_xvfb()
@@ -188,10 +153,8 @@ async def _launch_browser_hidden():
     if display:
         _original_display = os.environ.get("DISPLAY")
         os.environ["DISPLAY"] = display
-
-        # Remove Wayland env vars so Chrome doesn't connect to the real compositor
         wayland_display = os.environ.pop("WAYLAND_DISPLAY", None)
-        xdg_session = os.environ.get("XDG_SESSION_TYPE")
+        xdg_session     = os.environ.get("XDG_SESSION_TYPE")
         if xdg_session:
             os.environ["XDG_SESSION_TYPE"] = "x11"
 
@@ -200,20 +163,9 @@ async def _launch_browser_hidden():
             browser = await uc.start(
                 headless=False,
                 user_data_dir=os.path.abspath(".browser_profile"),
-                browser_args=[
-                    "--no-sandbox",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--lang=en-US,en",
-                    "--window-size=1920,1080",
-                    # Force X11 — without this, Chromium on Wayland ignores Xvfb entirely
-                    "--ozone-platform=x11",
-                    f"--display={display}",
-                ],
+                browser_args=BROWSER_ARGS_BASE + ["--ozone-platform=x11", f"--display={display}"],
             )
         finally:
-            # Restore Wayland env vars so the rest of the system is unaffected
             if wayland_display is not None:
                 os.environ["WAYLAND_DISPLAY"] = wayland_display
             if xdg_session:
@@ -223,26 +175,17 @@ async def _launch_browser_hidden():
         browser = await uc.start(
             headless=False,
             user_data_dir=os.path.abspath(".browser_profile"),
-            browser_args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--lang=en-US,en",
-                "--window-size=1920,1080",
-                "--headless=new",
-            ],
+            browser_args=BROWSER_ARGS_BASE + ["--headless=new"],
         )
 
     return browser
 
+
 def _restore_display():
-    """Restore the original DISPLAY env var after hidden browser is done."""
     global _original_display
     if _original_display is not None:
         os.environ["DISPLAY"] = _original_display
         _original_display = None
-    # If there was no original display, remove ours so it doesn't leak
     elif _xvfb_display and os.environ.get("DISPLAY") == _xvfb_display:
         os.environ.pop("DISPLAY", None)
 
@@ -252,13 +195,8 @@ def _restore_display():
 def _is_challenge_page(title: str) -> bool:
     t = title.lower()
     return any(kw in t for kw in (
-        "just a moment",
-        "cloudflare",
-        "attention required",
-        "challenge",
-        "please wait",
-        "checking your browser",
-        "verify you are human",
+        "just a moment", "cloudflare", "attention required",
+        "challenge", "please wait", "checking your browser", "verify you are human",
     ))
 
 
@@ -296,10 +234,9 @@ async def _extract_cookies_and_token(browser, tab) -> tuple[dict, str | None]:
     try:
         raw = await browser.cookies.get_all()
         for c in raw:
-            domain = getattr(c, "domain", "") or ""
-            name   = getattr(c, "name", "")   or ""
-            value  = getattr(c, "value", "")   or ""
-            if "upwork.com" in domain:
+            if "upwork.com" in (getattr(c, "domain", "") or ""):
+                name  = getattr(c, "name", "")  or ""
+                value = getattr(c, "value", "") or ""
                 cookies[name] = value
     except Exception as e:
         logger.warning(f"[extract] Could not read cookies via CDP: {e}")
@@ -329,50 +266,20 @@ async def _extract_cookies_and_token(browser, tab) -> tuple[dict, str | None]:
                 return out;
             })()
         """)
-
-        ls_dict = {}
         if isinstance(ls_raw, dict):
-            ls_dict = ls_raw
-        elif isinstance(ls_raw, list):
-            for item in ls_raw:
-                if isinstance(item, (list, tuple)) and len(item) >= 2:
-                    ls_dict[str(item[0])] = str(item[1])
-                elif isinstance(item, dict):
-                    k = item.get("key") or item.get("name") or ""
-                    v = item.get("value") or ""
-                    if k:
-                        ls_dict[str(k)] = str(v)
-
-        for v in ls_dict.values():
-            if v and "oauth2v2" in str(v):
-                token = str(v).strip('"')
-                logger.info("[extract] Found token in localStorage.")
-                break
+            for v in ls_raw.values():
+                if v and "oauth2v2" in str(v):
+                    token = str(v).strip('"')
+                    logger.info("[extract] Found token in localStorage.")
+                    break
     except Exception as e:
         logger.warning(f"[extract] Could not read localStorage: {e}")
 
     if not token:
-        for name in (
-            "UniversalSearchNuxt_vt",
-            "visitor_gql_token",
-            "oauth2_global_js_token",
-            "visitor_topnav_gql_token",
-            "master_access_token",
-        ):
-            val = cookies.get(name, "")
-            if "oauth2v2" in val:
-                if name == "master_access_token" and "." in val:
-                    token = val.split(".", 1)[-1]
-                else:
-                    token = val
+        for name in ("UniversalSearchNuxt_vt", "visitor_gql_token", "oauth2_global_js_token"):
+            if cookies.get(name):
+                token = cookies[name]
                 logger.info(f"[extract] Found token in cookie: {name}")
-                break
-
-    if not token:
-        for name, val in cookies.items():
-            if "oauth2v2" in val:
-                token = val
-                logger.info(f"[extract] Found token in unexpected cookie: {name}")
                 break
 
     return cookies, token
@@ -383,14 +290,12 @@ def _write_config(cookies: dict, token: str | None) -> None:
         with open(CONFIG_FILE) as f:
             config = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        config = {"COOKIES": {}, "HEADERS": {}}
+        config = {"COOKIES": {}}
 
     config.setdefault("COOKIES", {})
-    config.setdefault("HEADERS", {})
     config["COOKIES"].update(cookies)
 
     if token:
-        config["HEADERS"]["authorization"] = f"Bearer {token}"
         for key in ("oauth2_global_js_token", "UniversalSearchNuxt_vt", "visitor_gql_token"):
             config["COOKIES"][key] = token
 
@@ -398,98 +303,81 @@ def _write_config(cookies: dict, token: str | None) -> None:
         json.dump(config, f, indent=4)
 
 
-# ── Public API ────────────────────────────────────────────────────────────────
+# ── Shared harvest logic ──────────────────────────────────────────────────────
 
-async def bootstrap() -> bool:
+async def _harvest_cookies(cf_timeout: int = 60) -> bool:
     """
-    Bootstrap visitor session — no login required.
-    Loads the homepage and search page to harvest CF cookies + visitor tokens,
-    identical to refresh_browser_cookies() but used on first run.
+    Navigate to Upwork homepage + search page, harvest CF cookies and visitor tokens.
+    Used by both bootstrap() (first run) and refresh_browser_cookies() (periodic).
     """
     global _browser
-
-    msg = "[bootstrap] Starting visitor cookie harvest (no login required)..."
-    logger.info(msg); _log("INFO", msg)
 
     try:
         _browser = await _launch_browser_hidden()
 
         tab = await _browser.get("https://www.upwork.com/")
-        await _wait_for_cloudflare(tab, timeout=60)
+        await _wait_for_cloudflare(tab, timeout=cf_timeout)
         await asyncio.sleep(3 + random.random() * 2)
 
-        msg = "[bootstrap] Navigating to search page for visitor tokens..."
-        logger.info(msg); _log("INFO", msg)
+        logger.info("[harvest] Navigating to search page for visitor tokens...")
         await tab.get("https://www.upwork.com/nx/search/jobs/?q=python&sort=recency")
         await _wait_for_cloudflare(tab, timeout=30)
         await asyncio.sleep(5 + random.random() * 3)
 
         cookies, token = await _extract_cookies_and_token(_browser, tab)
         if not cookies:
-            msg = "[bootstrap] No cookies harvested."
-            logger.error(msg); _log("ERROR", msg)
+            logger.error("[harvest] No cookies harvested.")
             return False
 
         _write_config(cookies, token)
-
-        msg = f"[bootstrap] Success — {len(cookies)} cookies, token={'yes' if token else 'no'}."
-        logger.info(msg); _log("INFO", msg)
+        logger.info(f"[harvest] Done — {len(cookies)} cookies, token={'yes' if token else 'no'}.")
         return True
 
     except Exception as e:
-        msg = f"[bootstrap] Failed: {e}"
-        logger.error(msg); _log("ERROR", msg)
+        logger.error(f"[harvest] Failed: {e}")
         return False
     finally:
         await _safe_close()
-        _restore_display()
-        _stop_xvfb()
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def needs_bootstrap() -> bool:
+    """True if config.json is missing, empty, or lacks any visitor token."""
+    if not os.path.exists(CONFIG_FILE):
+        return True
+    try:
+        cookies = json.load(open(CONFIG_FILE)).get("COOKIES", {})
+        if not cookies:
+            return True
+        visitor_tokens = ("UniversalSearchNuxt_vt", "visitor_gql_token", "oauth2_global_js_token")
+        return not any(cookies.get(t) for t in visitor_tokens)
+    except (json.JSONDecodeError, KeyError):
+        return True
+
+
+async def bootstrap() -> bool:
+    """Bootstrap visitor session on first run (longer CF timeout)."""
+    msg = "[bootstrap] Starting visitor cookie harvest..."
+    logger.info(msg); _log("INFO", msg)
+    ok = await _harvest_cookies(cf_timeout=60)
+    if ok:
+        _log("INFO", "[bootstrap] Success.")
+    else:
+        _log("ERROR", "[bootstrap] Failed.")
+    return ok
 
 
 async def refresh_browser_cookies() -> bool:
-    """Refresh cookies invisibly — Xvfb or headless, no visible window."""
-    global _browser
-
+    """Periodic cookie refresh via hidden browser."""
     msg = "[refresh] Refreshing cookies via hidden browser..."
     logger.info(msg); _log("INFO", msg)
-
-    try:
-        _browser = await _launch_browser_hidden()
-
-        tab = await _browser.get("https://www.upwork.com/")
-        await _wait_for_cloudflare(tab, timeout=45)
-        await asyncio.sleep(3 + random.random() * 2)
-
-        logger.info("[refresh] Navigating to search page for search token...")
-        await tab.get("https://www.upwork.com/nx/search/jobs/?q=python&sort=recency")
-        await _wait_for_cloudflare(tab, timeout=30)
-        await asyncio.sleep(5 + random.random() * 3)
-
-        cookies, token = await _extract_cookies_and_token(_browser, tab)
-        if not cookies:
-            msg = "[refresh] No cookies obtained."
-            logger.warning(msg); _log("WARNING", msg)
-            return False
-
-        logger.info(
-            f"[refresh] Tokens — search: {bool(cookies.get('UniversalSearchNuxt_vt'))}, "
-            f"topnav: {bool(cookies.get('visitor_topnav_gql_token'))}"
-        )
-
-        _write_config(cookies, token)
-
-        msg = f"[refresh] Cookies refreshed — {len(cookies)} cookies, token={'yes' if token else 'no'}."
-        logger.info(msg); _log("INFO", msg)
-        return True
-
-    except Exception as e:
-        msg = f"[refresh] Failed: {e}"
-        logger.error(msg); _log("ERROR", msg)
-        return False
-    finally:
-        await _safe_close()
-        _restore_display()
-        _stop_xvfb()
+    ok = await _harvest_cookies(cf_timeout=45)
+    if ok:
+        _log("INFO", "[refresh] Cookies refreshed.")
+    else:
+        _log("WARNING", "[refresh] No cookies obtained.")
+    return ok
 
 
 async def _safe_close():
@@ -500,9 +388,9 @@ async def _safe_close():
         except Exception:
             pass
         _browser = None
+    _restore_display()
+    _stop_xvfb()
 
 
 async def close_session():
     await _safe_close()
-    _restore_display()
-    _stop_xvfb()

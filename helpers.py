@@ -37,24 +37,23 @@ def time_ago(timestamp_str) -> str:
         return "Unknown"
 
 
-def format_budget(search: dict, opening: dict) -> str:
-    """Budget string from search tile + opening details."""
+def format_budget(details: dict) -> str:
+    """Budget string derived entirely from details (jobPubDetails payload)."""
     try:
-        job      = (search.get('jobTile') or {}).get('job') or {}
-        job_type = job.get('jobType', '')
-        ext      = opening.get('extendedBudgetInfo') or {}
+        opening  = details.get("opening") or {}
+        info     = opening.get("info") or {}
+        job_type = info.get("type", "")
+        ext      = opening.get("extendedBudgetInfo") or {}
 
-        if job_type == 'HOURLY':
-            lo = job.get('hourlyBudgetMin') or ext.get('hourlyBudgetMin')
-            hi = job.get('hourlyBudgetMax') or ext.get('hourlyBudgetMax')
+        if job_type == "HOURLY":
+            lo = ext.get("hourlyBudgetMin")
+            hi = ext.get("hourlyBudgetMax")
             if lo and hi:  return f"${float(lo):.0f}-${float(hi):.0f}/hr"
             if lo:         return f"${float(lo):.0f}/hr"
             return "Hourly"
 
-        if job_type == 'FIXED':
-            fpa    = job.get('fixedPriceAmount') or {}
-            amount = (fpa.get('amount') if isinstance(fpa, dict) else fpa) \
-                     or (opening.get('budget') or {}).get('amount')
+        if job_type == "FIXED":
+            amount = (opening.get("budget") or {}).get("amount")
             if amount: return f"${float(amount):,.0f}"
             return "Fixed"
 
@@ -77,13 +76,13 @@ def format_client_info(buyer: dict) -> str:
     Upwork requires a verified payment method before any charge can occur.
     """
     try:
-        location    = buyer.get('location') or {}
-        stats       = buyer.get('stats') or {}
-        charges     = stats.get('totalCharges') or {}
-        total_spent = float((charges.get('amount') if isinstance(charges, dict) else charges) or 0)
+        location    = buyer.get("location") or {}
+        stats       = buyer.get("stats") or {}
+        charges     = stats.get("totalCharges") or {}
+        total_spent = float((charges.get("amount") if isinstance(charges, dict) else charges) or 0)
 
         payment = "\u2705 Verified" if total_spent > 0 else "\u26aa Unverified/Unknown"
-        country = location.get('country') or 'Unknown'
+        country = location.get("country") or "Unknown"
 
         if total_spent >= 1_000_000: spent = f"${total_spent/1_000_000:.1f}M"
         elif total_spent >= 1_000:   spent = f"${total_spent/1_000:.1f}K"
@@ -95,32 +94,34 @@ def format_client_info(buyer: dict) -> str:
         return "N/A"
 
 
-def build_embed(search: dict, details: dict) -> discord.Embed:
-    """Summary embed for the channel feed."""
+def build_embed(details: dict) -> discord.Embed:
+    """
+    Summary embed for the channel feed.
+    Built entirely from the details (jobPubDetails) payload — no search data needed.
+    """
     try:
-        opening = details.get('opening') or {}
-        buyer   = details.get('buyer') or {}
-        job     = (search.get('jobTile') or {}).get('job') or {}
-
-        title      = clean_text(search.get('title') or 'Untitled')
-        ciphertext = job.get('ciphertext', '')
+        opening    = details.get("opening") or {}
+        buyer      = details.get("buyer") or {}
+        info       = opening.get("info") or {}
+        ciphertext = details.get("_ciphertext") or info.get("ciphertext", "")
         job_url    = f"https://www.upwork.com/jobs/{ciphertext}" if ciphertext else "https://www.upwork.com"
 
-        posted_str    = time_ago(opening.get('publishTime') or job.get('publishTime') or job.get('createTime'))
+        title         = clean_text(info.get("title") or "Untitled")
+        posted_str    = time_ago(opening.get("publishTime") or info.get("createdOn"))
         detected_time = datetime.now().strftime("%H:%M")
-        budget_str    = format_budget(search, opening)
-        level_str     = format_experience_level(opening.get('contractorTier') or job.get('contractorTier'))
-        duration_str  = (opening.get('engagementDuration') or {}).get('label') or 'N/A'
-        proposals     = (opening.get('clientActivity') or {}).get('totalApplicants', 0)
+        budget_str    = format_budget(details)
+        level_str     = format_experience_level(opening.get("contractorTier"))
+        duration_str  = (opening.get("engagementDuration") or {}).get("label") or "N/A"
+        proposals     = (opening.get("clientActivity") or {}).get("totalApplicants", 0)
         client_str    = format_client_info(buyer)
 
-        description = clean_text(opening.get('description') or search.get('description') or '')
-        preview     = description[:280].strip() + ('...' if len(description) > 280 else '')
+        description = clean_text(opening.get("description") or "")
+        preview     = description[:280].strip() + ("..." if len(description) > 280 else "")
 
-        sands  = opening.get('sandsData') or {}
-        skills = [s['prefLabel'] for s in (sands.get('ontologySkills') or []) if s.get('prefLabel')]
+        sands  = opening.get("sandsData") or {}
+        skills = [s["prefLabel"] for s in (sands.get("ontologySkills") or []) if s.get("prefLabel")]
         if not skills:
-            skills = [s['prefLabel'] for s in (sands.get('additionalSkills') or []) if s.get('prefLabel')]
+            skills = [s["prefLabel"] for s in (sands.get("additionalSkills") or []) if s.get("prefLabel")]
         skills_str = ", ".join(skills[:8]) or "Not listed"
 
         embed = discord.Embed(
@@ -143,11 +144,10 @@ def build_embed(search: dict, details: dict) -> discord.Embed:
 
     except Exception as e:
         _log("ERROR", f"[build_embed] {e}")
-        job    = (search.get('jobTile') or {}).get('job') or {}
-        cipher = job.get('ciphertext', '')
+        ciphertext = details.get("_ciphertext", "")
         return discord.Embed(
-            title       = f"\U0001f4bc {search.get('title', 'Untitled')}",
-            url         = f"https://www.upwork.com/jobs/{cipher}" if cipher else "https://www.upwork.com",
+            title       = "\U0001f4bc Job",
+            url         = f"https://www.upwork.com/jobs/{ciphertext}" if ciphertext else "https://www.upwork.com",
             color       = discord.Color.red(),
             description = "_(embed details unavailable)_",
         )

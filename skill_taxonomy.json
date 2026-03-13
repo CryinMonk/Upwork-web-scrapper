@@ -1,0 +1,1001 @@
+{
+  "java": {
+    "channel": "java",
+    "family": "software",
+    "aliases": [
+      "java",
+      "java8",
+      "java11",
+      "java17",
+      "java21",
+      "spring",
+      "spring-boot",
+      "spring-mvc",
+      "spring-cloud",
+      "spring-security",
+      "spring-data",
+      "spring-batch",
+      "spring-webflux",
+      "hibernate",
+      "jpa",
+      "jdbc",
+      "jvm",
+      "maven",
+      "gradle",
+      "quarkus",
+      "micronaut",
+      "jakarta",
+      "jakarta-ee",
+      "java-ee",
+      "tomcat",
+      "jetty",
+      "wildfly",
+      "jboss",
+      "junit",
+      "junit5",
+      "mockito",
+      "testng",
+      "jackson",
+      "gson",
+      "lombok"
+    ]
+  },
+  "kotlin": {
+    "channel": "kotlin",
+    "family": "software",
+    "aliases": [
+      "kotlin",
+      "kotlin-coroutines",
+      "kotlin-multiplatform",
+      "ktor",
+      "exposed"
+    ]
+  },
+  "scala": {
+    "channel": "scala",
+    "family": "software",
+    "aliases": [
+      "scala",
+      "akka",
+      "play-framework",
+      "slick",
+      "cats",
+      "zio",
+      "sbt",
+      "scalaz"
+    ]
+  },
+  "python": {
+    "channel": "python",
+    "family": "software",
+    "aliases": [
+      "python",
+      "py",
+      "python3",
+      "django",
+      "flask",
+      "fastapi",
+      "tornado",
+      "aiohttp",
+      "starlette",
+      "sanic",
+      "bottle",
+      "pyramid",
+      "falcon",
+      "celery",
+      "dramatiq",
+      "rq",
+      "sqlalchemy",
+      "alembic",
+      "pydantic",
+      "uvicorn",
+      "gunicorn",
+      "pytest",
+      "asyncio",
+      "requests",
+      "httpx",
+      "beautifulsoup",
+      "scrapy",
+      "poetry",
+      "pipenv"
+    ]
+  },
+  "go": {
+    "channel": "golang",
+    "family": "software",
+    "aliases": [
+      "go",
+      "golang",
+      "gin",
+      "fiber",
+      "echo",
+      "chi",
+      "gorilla",
+      "beego",
+      "gorm",
+      "sqlx",
+      "cobra",
+      "viper"
+    ]
+  },
+  "rust": {
+    "channel": "rust",
+    "family": "software",
+    "aliases": [
+      "rust",
+      "rs",
+      "actix",
+      "actix-web",
+      "axum",
+      "warp",
+      "rocket",
+      "tokio",
+      "async-std",
+      "serde",
+      "diesel",
+      "cargo"
+    ]
+  },
+  "c++": {
+    "channel": "cpp",
+    "family": "software",
+    "aliases": [
+      "c++",
+      "cpp",
+      "c++11",
+      "c++14",
+      "c++17",
+      "c++20",
+      "boost",
+      "qt",
+      "wxwidgets",
+      "cmake",
+      "llvm",
+      "clang",
+      "sfml"
+    ]
+  },
+  "c#": {
+    "channel": "dotnet",
+    "family": "software",
+    "aliases": [
+      "c#",
+      "cs",
+      "csharp",
+      "dotnet",
+      ".net",
+      ".net-core",
+      "asp.net",
+      "asp.net-core",
+      "aspnet",
+      "aspnetcore",
+      "blazor",
+      "razor",
+      "entity-framework",
+      "ef-core",
+      "dapper",
+      "wpf",
+      "winforms",
+      "maui",
+      "signalr",
+      "hangfire",
+      "nuget"
+    ]
+  },
+  "ruby": {
+    "channel": "ruby",
+    "family": "software",
+    "aliases": [
+      "ruby",
+      "rb",
+      "rails",
+      "ruby-on-rails",
+      "ror",
+      "sinatra",
+      "rack",
+      "hanami",
+      "activerecord",
+      "sidekiq",
+      "rspec",
+      "minitest"
+    ]
+  },
+  "php": {
+    "channel": "php",
+    "family": "software",
+    "aliases": [
+      "php",
+      "php8",
+      "php7",
+      "laravel",
+      "symfony",
+      "codeigniter",
+      "yii",
+      "slim",
+      "composer",
+      "doctrine",
+      "eloquent"
+    ]
+  },
+  "typescript": {
+    "channel": "typescript",
+    "family": "software",
+    "aliases": [
+      "typescript",
+      "ts",
+      "tsx",
+      "javascript",
+      "js",
+      "jsx",
+      "es6",
+      "esnext",
+      "ecmascript",
+      "tsc"
+    ]
+  },
+  "nodejs": {
+    "channel": "nodejs",
+    "family": "software",
+    "aliases": [
+      "nodejs",
+      "node.js",
+      "node",
+      "deno",
+      "bun",
+      "express",
+      "fastify",
+      "koa",
+      "hapi",
+      "nestjs",
+      "nest.js",
+      "adonisjs"
+    ]
+  },
+  "react": {
+    "channel": "react",
+    "family": "software",
+    "aliases": [
+      "react",
+      "react.js",
+      "reactjs",
+      "redux",
+      "redux-toolkit",
+      "zustand",
+      "recoil",
+      "jotai",
+      "mobx",
+      "react-query",
+      "swr",
+      "react-router"
+    ]
+  },
+  "nextjs": {
+    "channel": "nextjs",
+    "family": "software",
+    "aliases": [
+      "nextjs",
+      "next.js",
+      "next"
+    ]
+  },
+  "vue": {
+    "channel": "vue",
+    "family": "software",
+    "aliases": [
+      "vue",
+      "vue.js",
+      "vuejs",
+      "vue3",
+      "pinia",
+      "vuex",
+      "vue-router",
+      "nuxt",
+      "nuxt.js",
+      "nuxtjs"
+    ]
+  },
+  "angular": {
+    "channel": "angular",
+    "family": "software",
+    "aliases": [
+      "angular",
+      "angularjs",
+      "angular2",
+      "rxjs",
+      "ngrx",
+      "ionic"
+    ]
+  },
+  "svelte": {
+    "channel": "svelte",
+    "family": "software",
+    "aliases": [
+      "svelte",
+      "sveltekit"
+    ]
+  },
+  "ios": {
+    "channel": "ios",
+    "family": "software",
+    "aliases": [
+      "ios",
+      "swift",
+      "swiftui",
+      "uikit",
+      "xcode",
+      "objective-c",
+      "cocoa",
+      "arkit",
+      "core-data"
+    ]
+  },
+  "android": {
+    "channel": "android",
+    "family": "software",
+    "aliases": [
+      "android",
+      "android-studio",
+      "jetpack-compose",
+      "compose",
+      "room",
+      "retrofit"
+    ]
+  },
+  "flutter": {
+    "channel": "flutter",
+    "family": "software",
+    "aliases": [
+      "flutter",
+      "dart"
+    ]
+  },
+  "react-native": {
+    "channel": "react-native",
+    "family": "software",
+    "aliases": [
+      "react-native",
+      "rn",
+      "expo"
+    ]
+  },
+  "docker": {
+    "channel": "docker",
+    "family": "devops",
+    "aliases": [
+      "docker",
+      "dockerfile",
+      "docker-compose",
+      "containers",
+      "podman",
+      "containerd"
+    ]
+  },
+  "kubernetes": {
+    "channel": "kubernetes",
+    "family": "devops",
+    "aliases": [
+      "kubernetes",
+      "k8s",
+      "helm",
+      "kubectl",
+      "kustomize",
+      "argocd",
+      "flux",
+      "gitops",
+      "istio",
+      "linkerd"
+    ]
+  },
+  "terraform": {
+    "channel": "terraform",
+    "family": "devops",
+    "aliases": [
+      "terraform",
+      "tf",
+      "hcl",
+      "opentofu",
+      "pulumi",
+      "ansible",
+      "chef",
+      "puppet"
+    ]
+  },
+  "cicd": {
+    "channel": "cicd",
+    "family": "devops",
+    "aliases": [
+      "cicd",
+      "ci-cd",
+      "continuous-integration",
+      "github-actions",
+      "gitlab-ci",
+      "jenkins",
+      "circle-ci",
+      "travis-ci",
+      "teamcity",
+      "buildkite"
+    ]
+  },
+  "aws": {
+    "channel": "aws",
+    "family": "cloud",
+    "aliases": [
+      "aws",
+      "amazon-web-services",
+      "ec2",
+      "s3",
+      "lambda",
+      "rds",
+      "dynamodb",
+      "cloudfront",
+      "ecs",
+      "eks",
+      "fargate",
+      "sqs",
+      "sns",
+      "api-gateway",
+      "cloudformation",
+      "cdk",
+      "amplify"
+    ]
+  },
+  "gcp": {
+    "channel": "gcp",
+    "family": "cloud",
+    "aliases": [
+      "gcp",
+      "google-cloud",
+      "google-cloud-platform",
+      "gke",
+      "cloud-run",
+      "cloud-functions",
+      "bigquery",
+      "firebase",
+      "firestore",
+      "pubsub",
+      "vertex-ai"
+    ]
+  },
+  "azure": {
+    "channel": "azure",
+    "family": "cloud",
+    "aliases": [
+      "azure",
+      "microsoft-azure",
+      "azure-functions",
+      "azure-devops",
+      "azure-pipelines",
+      "aks",
+      "cosmos-db",
+      "azure-sql"
+    ]
+  },
+  "postgresql": {
+    "channel": "postgresql",
+    "family": "databases",
+    "aliases": [
+      "postgresql",
+      "postgres",
+      "psql",
+      "pg",
+      "supabase",
+      "neon"
+    ]
+  },
+  "mysql": {
+    "channel": "mysql",
+    "family": "databases",
+    "aliases": [
+      "mysql",
+      "mariadb",
+      "percona",
+      "planetscale"
+    ]
+  },
+  "mongodb": {
+    "channel": "mongodb",
+    "family": "databases",
+    "aliases": [
+      "mongodb",
+      "mongo",
+      "mongoose",
+      "atlas"
+    ]
+  },
+  "redis": {
+    "channel": "redis",
+    "family": "databases",
+    "aliases": [
+      "redis",
+      "valkey",
+      "upstash",
+      "dragonfly"
+    ]
+  },
+  "elasticsearch": {
+    "channel": "elasticsearch",
+    "family": "databases",
+    "aliases": [
+      "elasticsearch",
+      "elastic",
+      "kibana",
+      "logstash",
+      "elk",
+      "opensearch"
+    ]
+  },
+  "machine-learning": {
+    "channel": "machine-learning",
+    "family": "ai-ml",
+    "aliases": [
+      "machine-learning",
+      "ml",
+      "deep-learning",
+      "neural-networks",
+      "nlp",
+      "computer-vision",
+      "llm",
+      "generative-ai",
+      "gen-ai",
+      "tensorflow",
+      "pytorch",
+      "keras",
+      "jax",
+      "scikit-learn",
+      "sklearn",
+      "xgboost",
+      "lightgbm",
+      "huggingface",
+      "transformers",
+      "langchain",
+      "llamaindex",
+      "opencv",
+      "onnx"
+    ]
+  },
+  "data-science": {
+    "channel": "data-science",
+    "family": "ai-ml",
+    "aliases": [
+      "data-science",
+      "data-analysis",
+      "data-engineering",
+      "pandas",
+      "numpy",
+      "scipy",
+      "matplotlib",
+      "plotly",
+      "jupyter",
+      "dask",
+      "polars",
+      "apache-spark",
+      "pyspark",
+      "airflow",
+      "dbt",
+      "tableau",
+      "power-bi",
+      "looker"
+    ]
+  },
+  "wordpress": {
+    "channel": "wordpress",
+    "family": "software",
+    "aliases": [
+      "wordpress",
+      "wp",
+      "woocommerce",
+      "elementor",
+      "gutenberg"
+    ]
+  },
+  "cms": {
+    "channel": "cms",
+    "family": "software",
+    "aliases": [
+      "cms",
+      "drupal",
+      "magento",
+      "shopify",
+      "webflow",
+      "contentful",
+      "sanity",
+      "strapi"
+    ]
+  },
+  "unity": {
+    "channel": "unity",
+    "family": "gamedev",
+    "aliases": [
+      "unity",
+      "unity3d"
+    ]
+  },
+  "unreal-engine": {
+    "channel": "unreal-engine",
+    "family": "gamedev",
+    "aliases": [
+      "unreal-engine",
+      "unreal",
+      "ue4",
+      "ue5",
+      "blueprints"
+    ]
+  },
+  "blockchain": {
+    "channel": "blockchain",
+    "family": "software",
+    "aliases": [
+      "blockchain",
+      "web3",
+      "ethereum",
+      "solidity",
+      "smart-contracts",
+      "hardhat",
+      "foundry",
+      "solana",
+      "nft",
+      "defi"
+    ]
+  },
+  "ui-ux": {
+    "channel": "ui-ux",
+    "family": "design",
+    "aliases": [
+      "ui-ux",
+      "ui",
+      "ux",
+      "user-interface",
+      "user-experience",
+      "figma",
+      "sketch",
+      "adobe-xd",
+      "invision",
+      "framer",
+      "wireframing",
+      "prototyping",
+      "design-systems",
+      "usability",
+      "interaction-design"
+    ]
+  },
+  "graphic-design": {
+    "channel": "graphic-design",
+    "family": "design",
+    "aliases": [
+      "graphic-design",
+      "graphics",
+      "adobe-illustrator",
+      "illustrator",
+      "adobe-photoshop",
+      "photoshop",
+      "ps",
+      "adobe-indesign",
+      "indesign",
+      "coreldraw",
+      "affinity-designer",
+      "logo-design",
+      "branding",
+      "brand-identity",
+      "typography",
+      "print-design"
+    ]
+  },
+  "motion-graphics": {
+    "channel": "motion-graphics",
+    "family": "design",
+    "aliases": [
+      "motion-graphics",
+      "motion-design",
+      "animation",
+      "after-effects",
+      "ae",
+      "adobe-after-effects",
+      "cinema-4d",
+      "c4d",
+      "2d-animation",
+      "explainer-video",
+      "kinetic-typography",
+      "lottie",
+      "rive"
+    ]
+  },
+  "3d-design": {
+    "channel": "3d-design",
+    "family": "design",
+    "aliases": [
+      "3d-design",
+      "3d-modeling",
+      "3d",
+      "blender",
+      "maya",
+      "autodesk-maya",
+      "3ds-max",
+      "zbrush",
+      "solidworks",
+      "autocad",
+      "cad",
+      "product-design",
+      "industrial-design"
+    ]
+  },
+  "video-editing": {
+    "channel": "video-editing",
+    "family": "video",
+    "aliases": [
+      "video-editing",
+      "video-editor",
+      "video-production",
+      "premiere-pro",
+      "adobe-premiere",
+      "premiere",
+      "final-cut-pro",
+      "fcp",
+      "avid",
+      "avid-media-composer",
+      "imovie"
+    ]
+  },
+  "cinematography": {
+    "channel": "cinematography",
+    "family": "video",
+    "aliases": [
+      "cinematography",
+      "videography",
+      "cameraman",
+      "camera-operator",
+      "director-of-photography",
+      "dp",
+      "dop",
+      "film-lighting",
+      "lighting",
+      "drone-videography",
+      "aerial-videography"
+    ]
+  },
+  "color-grading": {
+    "channel": "color-grading",
+    "family": "video",
+    "aliases": [
+      "color-grading",
+      "colour-grading",
+      "color-correction",
+      "colour-correction",
+      "colorist",
+      "davinci-resolve",
+      "resolve",
+      "lumetri",
+      "luts",
+      "hdr-grading"
+    ]
+  },
+  "vfx": {
+    "channel": "vfx",
+    "family": "video",
+    "aliases": [
+      "vfx",
+      "visual-effects",
+      "compositing",
+      "nuke",
+      "fusion",
+      "rotoscoping",
+      "matte-painting",
+      "green-screen",
+      "chroma-key"
+    ]
+  },
+  "audio-production": {
+    "channel": "audio-production",
+    "family": "audio",
+    "aliases": [
+      "audio-production",
+      "music-production",
+      "beat-making",
+      "ableton",
+      "logic-pro",
+      "fl-studio",
+      "pro-tools",
+      "garageband",
+      "cubase",
+      "reaper",
+      "mixing",
+      "mastering",
+      "sound-design",
+      "audio-engineering"
+    ]
+  },
+  "voice-over": {
+    "channel": "voice-over",
+    "family": "audio",
+    "aliases": [
+      "voice-over",
+      "voiceover",
+      "voice-acting",
+      "narration",
+      "podcast-production",
+      "podcast",
+      "audiobook",
+      "dubbing"
+    ]
+  },
+  "photography": {
+    "channel": "photography",
+    "family": "creative",
+    "aliases": [
+      "photography",
+      "photographer",
+      "photo-editing",
+      "photo-retouching",
+      "retouching",
+      "lightroom",
+      "adobe-lightroom",
+      "product-photography",
+      "portrait-photography",
+      "real-estate-photography"
+    ]
+  },
+  "content-writing": {
+    "channel": "content-writing",
+    "family": "writing",
+    "aliases": [
+      "content-writing",
+      "content-writer",
+      "copywriting",
+      "copywriter",
+      "blog-writing",
+      "article-writing",
+      "seo-writing",
+      "ghostwriting",
+      "technical-writing",
+      "proofreading",
+      "editing"
+    ]
+  },
+  "creative-writing": {
+    "channel": "creative-writing",
+    "family": "writing",
+    "aliases": [
+      "creative-writing",
+      "fiction",
+      "screenwriting",
+      "scriptwriting",
+      "storytelling"
+    ]
+  },
+  "translation": {
+    "channel": "translation",
+    "family": "writing",
+    "aliases": [
+      "translation",
+      "translator",
+      "localization",
+      "localisation",
+      "transcription",
+      "subtitling",
+      "captioning",
+      "interpreting"
+    ]
+  },
+  "digital-marketing": {
+    "channel": "digital-marketing",
+    "family": "marketing",
+    "aliases": [
+      "digital-marketing",
+      "online-marketing",
+      "seo",
+      "search-engine-optimization",
+      "sem",
+      "google-ads",
+      "ppc",
+      "social-media-marketing",
+      "smm",
+      "email-marketing",
+      "mailchimp",
+      "klaviyo",
+      "content-marketing",
+      "affiliate-marketing"
+    ]
+  },
+  "social-media": {
+    "channel": "social-media",
+    "family": "marketing",
+    "aliases": [
+      "social-media",
+      "social-media-management",
+      "instagram",
+      "tiktok",
+      "youtube",
+      "facebook",
+      "linkedin",
+      "community-management",
+      "influencer-marketing"
+    ]
+  },
+  "project-management": {
+    "channel": "project-management",
+    "family": "business",
+    "aliases": [
+      "project-management",
+      "pm",
+      "pmp",
+      "agile",
+      "scrum",
+      "kanban",
+      "jira",
+      "trello",
+      "asana",
+      "product-management",
+      "product-owner"
+    ]
+  },
+  "accounting": {
+    "channel": "accounting",
+    "family": "business",
+    "aliases": [
+      "accounting",
+      "bookkeeping",
+      "accountant",
+      "quickbooks",
+      "xero",
+      "sage",
+      "tax",
+      "payroll",
+      "financial-reporting",
+      "cpa"
+    ]
+  },
+  "data-entry": {
+    "channel": "data-entry",
+    "family": "business",
+    "aliases": [
+      "data-entry",
+      "data-processing",
+      "excel",
+      "google-sheets",
+      "spreadsheets",
+      "virtual-assistant",
+      "va",
+      "admin"
+    ]
+  },
+  "customer-support": {
+    "channel": "customer-support",
+    "family": "business",
+    "aliases": [
+      "customer-support",
+      "customer-service",
+      "customer-success",
+      "zendesk",
+      "intercom",
+      "freshdesk",
+      "live-chat",
+      "help-desk"
+    ]
+  },
+  "unknown": {
+    "channel": "unknown",
+    "family": "architecture",
+    "aliases": [
+      "unknown",
+      "pokemon",
+      "entei"
+    ]
+  },
+  "pokemon": {
+    "channel": "genx",
+    "family": "96",
+    "aliases": [
+      "pikachu",
+      "bulbasaur",
+      "chikorita",
+      "charizard"
+    ]
+  },
+  "beyblade": {
+    "channel": "beyblade",
+    "family": "toys",
+    "aliases": [
+      "beyblade",
+      "g-revolution"
+    ]
+  }
+}

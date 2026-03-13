@@ -1,29 +1,24 @@
 """
-auth_manager.py — Token refresh via headless browser + CF cookies via HTTP.
+auth_manager.py — CF cookie refresh via HTTP (curl_cffi).
 
-After browser_session.bootstrap() runs once:
-  - CF cookies refreshed every 25 min via curl_cffi (fast, no browser)
-  - Auth token refreshed every 2 hours via nodriver (loads homepage, grabs token)
+CF cookies are refreshed every 25 min via a persistent curl_cffi session.
+The browser (nodriver) is only used on first bootstrap or when CF blocks curl_cffi,
+triggered by AuthExpiredError in the scraper — not on a timer.
 """
-
 
 import json
 import logging
 from datetime import datetime, timedelta
 from curl_cffi import requests as cf_requests
 from curl_cffi import CurlError
-from browser_session import refresh_browser_cookies
 from database import log
 
-CONFIG_FILE   = "config.json"
-CF_LIFETIME   = timedelta(minutes=25)
-AUTH_LIFETIME = timedelta(hours=2)
+CONFIG_FILE  = "config.json"
+CF_LIFETIME  = timedelta(minutes=25)
 
-logger             = logging.getLogger("auth_manager")
-_last_cf_refresh   = None
-_last_auth_refresh = None
+logger           = logging.getLogger("auth_manager")
+_last_cf_refresh = None
 
-# Session — reused across all CF refreshes
 _cf_session = cf_requests.Session(impersonate="chrome")
 
 CF_COOKIES = {
@@ -31,37 +26,25 @@ CF_COOKIES = {
     "AWSALB", "AWSALBCORS", "AWSALBTG", "AWSALBTGCORS",
     "__cflb", "spt", "forterToken",
 }
-AUTH_TOKENS = {"oauth2_global_js_token", "UniversalSearchNuxt_vt", "visitor_gql_token"}
 
 
 def _log(level: str, message: str):
     log(level, "auth_manager", message)
 
 
-def load_config(path: str = CONFIG_FILE) -> dict:
-    with open(path) as f:
+def load_config() -> dict:
+    with open(CONFIG_FILE) as f:
         return json.load(f)
 
 
-def save_config(config: dict, path: str = CONFIG_FILE):
-    with open(path, "w") as f:
+def save_config(config: dict):
+    with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
-
-
-def get_cookies_and_headers(path: str = CONFIG_FILE) -> tuple[dict, dict]:
-    config = load_config(path)
-    return config["COOKIES"], config["HEADERS"]
 
 
 def should_refresh() -> bool:
     return _last_cf_refresh is None or (datetime.now() - _last_cf_refresh > CF_LIFETIME)
 
-
-def should_refresh_auth() -> bool:
-    return _last_auth_refresh is None or (datetime.now() - _last_auth_refresh > AUTH_LIFETIME)
-
-
-# ── CF cookie refresh (HTTP only, persistent session) ─────────────────────────
 
 def refresh_cf_cookies() -> None:
     """Hit Upwork homepage with curl_cffi to get fresh CF cookies."""
@@ -94,43 +77,11 @@ def refresh_cf_cookies() -> None:
         logger.warning(msg); _log("WARNING", msg)
 
     session_cookies = _cf_session.cookies.get_dict()
-    updated = []
-    for name in CF_COOKIES:
-        val = session_cookies.get(name)
-        if val:
-            config["COOKIES"][name] = val
-            updated.append(name)
+    updated = [name for name in CF_COOKIES if session_cookies.get(name)]
+    for name in updated:
+        config["COOKIES"][name] = session_cookies[name]
 
     save_config(config)
     _last_cf_refresh = datetime.now()
     msg = f"[refresh_cf] CF cookies refreshed: {updated}"
     logger.info(msg); _log("INFO", msg)
-
-
-# ── Auth token refresh (nodriver browser) ─────────────────────────────────────
-
-async def refresh_auth_tokens() -> None:
-    """
-    Refresh visitor cookies by launching an undetected browser.
-    Delegates entirely to browser_session.refresh_browser_cookies().
-    """
-    global _last_auth_refresh
-
-    msg = "[refresh_auth] Refreshing visitor cookies via nodriver browser..."
-    logger.info(msg); _log("INFO", msg)
-
-    ok = await refresh_browser_cookies()
-    if ok:
-        _last_auth_refresh = datetime.now()
-    else:
-        raise RuntimeError("[refresh_auth] Failed to harvest visitor cookies.")
-
-
-# ── Full refresh ──────────────────────────────────────────────────────────────
-
-async def full_refresh() -> None:
-    """Refresh CF cookies (HTTP), then auth token via browser if due."""
-    refresh_cf_cookies()
-    if should_refresh_auth():
-        await refresh_auth_tokens()
-

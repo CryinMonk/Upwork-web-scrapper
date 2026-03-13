@@ -1,20 +1,17 @@
 import logging
 import json
-import re
-
+from json_helper import get_json
 from curl_cffi import requests
 from curl_cffi import CurlError
 from database import is_job_posted
-from graphql_payloads import  SEARCH_QUERY, DETAILS_QUERY
+from graphql_payloads import SEARCH_IDS_QUERY, DETAILS_QUERY
 from database import log
-from helpers import clean_text
+
 
 GRAPHQL_URL = "https://www.upwork.com/api/graphql/v1"
 
 _session = requests.Session(impersonate="chrome")
 logger   = logging.getLogger("fetchdata")
-
-_SB_COOKIE_RE = re.compile(r"^[0-9a-f]{8}sb$")
 
 
 class AuthExpiredError(Exception):
@@ -25,87 +22,38 @@ def _log(level: str, message: str):
     log(level, "fetchdata", message)
 
 
-def load_config(filepath: str = "config.json") -> dict:
-    with open(filepath, "r") as f:
-        return json.load(f)
-
-
-def get_cookies_and_headers() -> tuple[dict, dict]:
-    """Read fresh cookies and headers from config.json on every call — never stale."""
-    config = load_config()
-    return config["COOKIES"], config["HEADERS"]
-
-
-def _is_logged_in(cookies: dict) -> bool:
-    """True if config has a real logged-in session (has user_uid or master_access_token)."""
-    return bool(cookies.get("user_uid") or cookies.get("master_access_token"))
-
-
-def _find_bearer_token(cookies: dict, for_search: bool = False) -> str | None:
-    """
-    Find the correct bearer token.
-
-    for_search=True:  prioritise search-scoped tokens (UniversalSearchNuxt_vt)
-    for_search=False: any valid token
-    """
-    if for_search:
-        search_priority = (
-            "UniversalSearchNuxt_vt",
-            "visitor_gql_token",
-            "oauth2_global_js_token",
-        )
-        for name in search_priority:
-            val = cookies.get(name)
-            if val and "oauth2v2" in val:
-                return val
-
-    # Logged-in user tokens
-    for preferred in ("d7d66d64sb", "oauth2_global_js_token", "UniversalSearchNuxt_vt"):
-        val = cookies.get(preferred)
-        if val:
-            return val
-
-    for k, v in cookies.items():
-        if _SB_COOKIE_RE.match(k):
-            return v
-
-    val = cookies.get("visitor_topnav_gql_token")
-    if val:
-        return val
-
-    return None
-
-
-def _build_headers(cookies: dict, token: str | None, referer: str) -> dict:
-    """Build the full set of HTTP headers for Upwork GraphQL requests."""
-    request_headers = {
-        "accept":                    "*/*",
-        "accept-language":           "en-US,en;q=0.9",
-        "authorization":             f"bearer {token}" if token else "",
-        "content-type":              "application/json",
-        "origin":                    "https://www.upwork.com",
-        "priority":                  "u=1, i",
-        "referer":                   referer,
-        "sec-ch-ua":                 '"Chromium";v="145", "Not:A-Brand";v="99"',
-        "sec-ch-ua-mobile":          "?0",
-        "sec-ch-ua-platform":        '"Linux"',
-        "sec-fetch-dest":            "empty",
-        "sec-fetch-mode":            "cors",
-        "sec-fetch-site":            "same-origin",
-        "user-agent":                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                                     "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-        "x-upwork-accept-language":  "en-US",
+def _prepare_request(referer: str) -> tuple[dict, dict]:
+    """Load cookies and build headers for a GraphQL request."""
+    cookies = get_json()["COOKIES"]
+    token   = next(
+        (cookies[n] for n in ("UniversalSearchNuxt_vt", "visitor_gql_token", "oauth2_global_js_token")
+         if cookies.get(n)),
+        None,
+    )
+    headers = {
+        "accept":                   "*/*",
+        "accept-language":          "en-US,en;q=0.9",
+        "authorization":            f"bearer {token}" if token else "",
+        "content-type":             "application/json",
+        "origin":                   "https://www.upwork.com",
+        "priority":                 "u=1, i",
+        "referer":                  referer,
+        "sec-ch-ua":                '"Chromium";v="145", "Not:A-Brand";v="99"',
+        "sec-ch-ua-mobile":         "?0",
+        "sec-ch-ua-platform":       '"Linux"',
+        "sec-fetch-dest":           "empty",
+        "sec-fetch-mode":           "cors",
+        "sec-fetch-site":           "same-origin",
+        "user-agent":               "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                                    "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "x-upwork-accept-language": "en-US",
     }
-
-    xsrf = cookies.get("XSRF-TOKEN")
-    if xsrf:
-        request_headers["x-xsrf-token"] = xsrf
-
-    return request_headers
+    if xsrf := cookies.get("XSRF-TOKEN"):
+        headers["x-xsrf-token"] = xsrf
+    return cookies, headers
 
 
-def _do_graphql_post(cookies, headers, payload, params, label="graphql"):
-    """Execute a GraphQL POST and handle common error patterns. Returns response."""
+def _graphql_post(cookies, headers, payload, params, label="graphql"):
     try:
         response = _session.post(
             GRAPHQL_URL,
@@ -133,214 +81,137 @@ def _do_graphql_post(cookies, headers, payload, params, label="graphql"):
     return response
 
 
-def fetch_jobs(query: str, count: int = 10, offset: int = 0) -> list:
-    """
-    Search Upwork for jobs matching `query`.
-    Uses userJobSearch for logged-in sessions, visitorJobSearch for visitors.
-    Auto-falls-back to visitor if user search returns a permission error.
-    """
+def _parse_graphql_response(response, label: str) -> dict | None:
+    """Parse JSON and return data dict, or None on error."""
     try:
-        cookies, headers = get_cookies_and_headers()
-    except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-        msg = f"[fetch_jobs] Failed to load config: {e}"
+        data = response.json()
+    except (ValueError, json.JSONDecodeError) as e:
+        msg = f"[{label}] Failed to decode JSON: {e}"
         logger.error(msg); _log("ERROR", msg)
-        raise
+        return None
 
-    logged_in    = _is_logged_in(cookies)
-    session_type = "user" if logged_in else "visitor"
+    if "errors" in data:
+        err_msg = data["errors"][0].get("message", "") if data["errors"] else ""
+        msg = f"[{label}] GraphQL error: {err_msg}"
+        logger.warning(msg); _log("WARNING", msg)
+        if "data" not in data:
+            return None
 
-    msg = f"[fetch_jobs] Session type: {session_type} for query '{query}'"
-    logger.info(msg); _log("INFO", msg)
-
-    return _fetch_jobs_visitor(cookies, headers, query, count, offset)
+    return data
 
 
-def _fetch_jobs_visitor(cookies, headers, query, count, offset) -> list:
-    """Visitor search — works with search-scoped visitor tokens."""
-    token = _find_bearer_token(cookies, for_search=True)
-
-    if not token:
-        msg = "[fetch_jobs_visitor] No visitor token available."
-        logger.error(msg); _log("ERROR", msg)
-        return []
-
-    token_preview = token[:30] + "..." if token else "None"
-    logger.info(f"[fetch_jobs_visitor] Using token: {token_preview}")
-
-    request_headers = _build_headers(
-        cookies, token,
+def fetch_new_ciphertexts(query: str, count: int = 10, offset: int = 0) -> list[str]:
+    """
+    Lightweight search — fetches ciphertexts only, then filters out already-posted jobs.
+    Returns only the ciphertexts that are new and need detail fetching.
+    """
+    cookies, headers = _prepare_request(
         referer=f"https://www.upwork.com/nx/search/jobs/?q={query}",
     )
-
     payload = {
-        "query": SEARCH_QUERY,
+        "query": SEARCH_IDS_QUERY,
         "variables": {
             "requestVariables": {
                 "userQuery": query,
                 "sort": "recency+desc",
-                "highlight": True,
+                "highlight": False,
                 "paging": {"offset": offset, "count": count},
             },
         },
     }
 
     try:
-        response = _do_graphql_post(
-            cookies, request_headers, payload,
-            {"alias": "visitorJobSearch"}, label=f"fetch_jobs_visitor:{query}"
+        response = _graphql_post(
+            cookies, headers, payload,
+            {"alias": "visitorJobSearch"},
+            label=f"fetch_new_ciphertexts:{query}",
         )
-    except CurlError as e:
-        msg = f"[fetch_jobs_visitor] Network error for query '{query}': {e}"
-        logger.error(msg); _log("ERROR", msg)
-        raise
-
-    try:
-        data = response.json()
-    except (ValueError, json.JSONDecodeError) as e:
-        msg = f"[fetch_jobs_visitor] Failed to decode JSON for query '{query}': {e}"
-        logger.error(msg); _log("ERROR", msg)
+    except CurlError:
         return []
 
-    if "errors" in data:
-        err_msg = data["errors"][0].get("message", "") if data["errors"] else ""
-        msg = f"[fetch_jobs_visitor] GraphQL error for query '{query}': {err_msg}"
-        logger.error(msg); _log("ERROR", msg)
-        if "data" not in data:
-            return []
+    data = _parse_graphql_response(response, label=f"fetch_new_ciphertexts:{query}")
+    if data is None:
+        return []
 
     try:
-        nuxt = data["data"]["search"]["universalSearchNuxt"]
-        search_root = nuxt.get("visitorJobSearchV1")
-        if not search_root:
-            raise KeyError("visitorJobSearchV1 not found")
-        results = search_root["results"]
-        paging  = search_root["paging"]
-        msg = f"[fetch_jobs_visitor] Query '{query}': {paging['total']} total, fetched {len(results)}"
-        logger.info(msg); _log("INFO", msg)
-        return results
+        search_root = data["data"]["search"]["universalSearchNuxt"]["visitorJobSearchV1"]
+        results     = search_root["results"]
+        total       = search_root["paging"]["total"]
     except (KeyError, TypeError) as e:
-        msg = f"[fetch_jobs_visitor] Unexpected response shape for query '{query}': {e}"
+        msg = f"[fetch_new_ciphertexts] Unexpected response shape for '{query}': {e}"
         logger.error(msg); _log("ERROR", msg)
-        try:
-            preview = json.dumps(data)[:800]
-        except Exception:
-            preview = str(data)[:800]
-        logger.error(f"[fetch_jobs_visitor] Response body: {preview}")
-        _log("ERROR", f"[fetch_jobs_visitor] Response body: {preview}")
         return []
+
+    # Extract ciphertexts and drop already-posted jobs immediately
+    all_ciphertexts = [
+        ct for r in results
+        if (ct := (r.get("jobTile") or {}).get("job", {}).get("ciphertext"))
+    ]
+    new_ciphertexts = [ct for ct in all_ciphertexts if not is_job_posted(ct)]
+
+    msg = (
+        f"[fetch_new_ciphertexts] '{query}': {total} total on Upwork, "
+        f"{len(all_ciphertexts)} fetched, {len(new_ciphertexts)} new"
+    )
+    logger.info(msg); _log("INFO", msg)
+
+    return new_ciphertexts
 
 
 def fetch_job_details(ciphertext: str) -> dict:
-    """
-    Fetch full details for a single job by ciphertext.
-    Uses the SAME search-scoped token and header format as the search endpoint —
-    the details API requires the same authorization.
-    """
-    try:
-        cookies, headers = get_cookies_and_headers()
-    except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-        msg = f"[fetch_job_details] Failed to load config for {ciphertext}: {e}"
-        logger.error(msg); _log("ERROR", msg)
-        raise
-
-    # Use the search-scoped token — that works for job search
-    token = _find_bearer_token(cookies, for_search=True)
-    if not token:
-        # Fallback to whatever is in the Authorization header
-        token = headers.get("authorization", "").removeprefix("Bearer ").removeprefix("bearer ").strip()
-
-    # Build headers the same way as the search request — must match
-    request_headers = _build_headers(
-        cookies, token,
-        referer=f"https://www.upwork.com/nx/search/jobs/",
+    """Fetch full details for a single job by ciphertext."""
+    cookies, headers = _prepare_request(
+        referer="https://www.upwork.com/nx/search/jobs/",
     )
-
-    # Only include tenant ID for logged-in sessions
-    if _is_logged_in(cookies):
-        org_uid = cookies.get("current_organization_uid")
-        if org_uid:
-            request_headers["x-upwork-api-tenantid"] = org_uid
-
     payload = {
         "query": DETAILS_QUERY,
         "variables": {"id": ciphertext},
     }
 
-    try:
-        response = _do_graphql_post(
-            cookies, request_headers, payload,
-            {"alias": "gql-query-get-visitor-job-details"},
-            label=f"fetch_job_details:{ciphertext}"
-        )
-    except (AuthExpiredError, CurlError):
-        raise
+    response = _graphql_post(
+        cookies, headers, payload,
+        {"alias": "gql-query-get-visitor-job-details"},
+        label=f"fetch_job_details:{ciphertext}",
+    )
 
-    try:
-        data = response.json()
-    except (ValueError, json.JSONDecodeError) as e:
-        msg = f"[fetch_job_details] Failed to decode JSON for {ciphertext}: {e}"
-        logger.error(msg); _log("ERROR", msg)
+    data = _parse_graphql_response(response, label=f"fetch_job_details:{ciphertext}")
+    if data is None:
         return {}
-
-    # Check for GraphQL-level errors
-    if "errors" in data:
-        err_msg = data["errors"][0].get("message", "") if data["errors"] else ""
-        msg = f"[fetch_job_details] GraphQL error for {ciphertext}: {err_msg}"
-        logger.warning(msg); _log("WARNING", msg)
-        # If data is also present, try to extract partial result
-        if "data" not in data:
-            return {}
 
     try:
         return data["data"]["jobPubDetails"] or {}
     except (KeyError, TypeError) as e:
         msg = f"[fetch_job_details] Unexpected response shape for {ciphertext}: {e}"
         logger.error(msg); _log("ERROR", msg)
-        try:
-            preview = json.dumps(data)[:500]
-        except Exception:
-            preview = str(data)[:500]
-        logger.error(f"[fetch_job_details] Response body: {preview}")
-        _log("ERROR", f"[fetch_job_details] Response body: {preview}")
+        _log("ERROR", f"[fetch_job_details] Response body: {json.dumps(data)[:500]}")
         return {}
 
 
 def fetch_jobs_with_details(query: str, count: int = 10) -> list[dict]:
-    """Fetch jobs and enrich only NEW jobs with full details."""
+    """
+    1. Fetch ciphertexts only (lightweight search request)
+    2. Drop already-posted jobs via DB check
+    3. Fetch full details for new jobs only
+    4. Return list of detail dicts — each has _ciphertext attached for the caller
+    """
+    new_ciphertexts = fetch_new_ciphertexts(query=query, count=count)
 
-    jobs     = fetch_jobs(query=query, count=count)
     enriched = []
-
-    for job in jobs:
-        ciphertext = (job.get("jobTile") or {}).get("job", {}).get("ciphertext")
-
-        if not ciphertext:
-            msg = f"[fetch_jobs_with_details] No ciphertext for job id={job.get('id')}, skipping."
-            logger.warning(msg); _log("WARNING", msg)
-            enriched.append({"search": job, "details": {}})
-            continue
-
-        if is_job_posted(ciphertext):
-            enriched.append({"search": job, "details": {}})
-            continue
-
-        title = clean_text(job.get("title", ciphertext))
-        msg   = f"[fetch_jobs_with_details] Fetching details for new job: {title} ({ciphertext})"
-        logger.info(msg); _log("INFO", msg)
+    for ciphertext in new_ciphertexts:
+        logger.info(f"[fetch_jobs_with_details] Fetching details for: {ciphertext}")
 
         try:
             details = fetch_job_details(ciphertext)
-        except AuthExpiredError:
-            # Details 403 is non-fatal — include job without details rather
-            # than triggering a full auth refresh
-            msg = f"[fetch_jobs_with_details] 403 on details for {ciphertext} — including without details."
-            logger.warning(msg); _log("WARNING", msg)
-            details = {}
-        except Exception as e:
-            msg = f"[fetch_jobs_with_details] Could not fetch details for {ciphertext}: {e}. Including without details."
-            logger.warning(msg); _log("WARNING", msg)
-            details = {}
+        except (AuthExpiredError, CurlError):
+            raise  # Re-raise so discordbot can handle auth refresh
 
-        enriched.append({"search": job, "details": details})
+        if not details:
+            msg = f"[fetch_jobs_with_details] Empty details for {ciphertext}, skipping."
+            logger.warning(msg); _log("WARNING", msg)
+            continue
+
+        # Attach ciphertext so callers don't need to track it separately
+        details["_ciphertext"] = ciphertext
+        enriched.append(details)
 
     return enriched

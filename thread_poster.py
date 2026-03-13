@@ -8,7 +8,6 @@ logger = logging.getLogger("thread_poster")
 
 
 def _log(level: str, message: str):
-    """Persist a log record to the database. Single responsibility: DB log forwarding."""
     log(level, "thread_poster", message)
 
 
@@ -18,9 +17,13 @@ def clean_thread_name(title: str) -> str:
     return clean[:95] + "..." if len(clean) > 95 else clean
 
 
-async def post_job_thread(message: discord.Message, search: dict, details: dict):
-    """Create a thread on `message` and post full job detail embeds inside it."""
-    title = clean_thread_name(search.get('title', 'Job Details'))
+async def post_job_thread(message: discord.Message, details: dict):
+    """
+    Create a thread on `message` and post full job detail embeds inside it.
+    Built entirely from the details payload — no search dict needed.
+    """
+    info  = (details.get("opening") or {}).get("info") or {}
+    title = clean_thread_name(info.get("title") or "Job Details")
 
     try:
         thread = await message.create_thread(
@@ -29,38 +32,32 @@ async def post_job_thread(message: discord.Message, search: dict, details: dict)
         )
     except discord.Forbidden:
         msg = f"[post_job_thread] Missing permissions to create thread for '{title}'."
-        logger.warning(msg)
-        _log("WARNING", msg)
+        logger.warning(msg); _log("WARNING", msg)
         return None
     except discord.HTTPException as e:
         msg = f"[post_job_thread] HTTP error creating thread for '{title}': status={e.status} — {e.text}"
-        logger.error(msg)
-        _log("ERROR", msg)
+        logger.error(msg); _log("ERROR", msg)
         return None
     except Exception as e:
         msg = f"[post_job_thread] Unexpected error creating thread for '{title}': {e}"
-        logger.error(msg)
-        _log("ERROR", msg)
+        logger.error(msg); _log("ERROR", msg)
         return None
 
-    embeds = build_thread_embed(search, details)
+    embeds = build_thread_embed(details)
     for embed in embeds:
         try:
             await thread.send(embed=embed)
         except discord.Forbidden:
             msg = f"[post_job_thread] Missing permissions to send embed in thread '{title}'."
-            logger.warning(msg)
-            _log("WARNING", msg)
-            break  # No point continuing if we can't send in this thread
+            logger.warning(msg); _log("WARNING", msg)
+            break
         except discord.HTTPException as e:
             msg = f"[post_job_thread] HTTP error sending embed in thread '{title}': status={e.status} — {e.text}"
-            logger.error(msg)
-            _log("ERROR", msg)
+            logger.error(msg); _log("ERROR", msg)
             break
         except Exception as e:
             msg = f"[post_job_thread] Unexpected error sending embed in thread '{title}': {e}"
-            logger.error(msg)
-            _log("ERROR", msg)
+            logger.error(msg); _log("ERROR", msg)
             break
 
     return thread
