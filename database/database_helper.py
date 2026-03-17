@@ -2,14 +2,23 @@ import re
 
 def _extract_job_record(details: dict) -> dict:
     """
-    Pull all storable fields out of a jobPubDetails dict.
+    Pull all storable fields out of a jobAuthDetails dict.
+
+    API response structure:
+      details["opening"]["job"]       — all job fields (info, description, budget, etc.)
+      details["buyer"]["info"]        — stats, location, company
+      details["buyer"]["workHistory"] — past contracts
+
     Description is capped at 200 characters — brief snapshot, not full text.
     """
-    opening  = details.get("opening") or {}
+    # Unwrap the two extra nesting levels the API adds
+    opening  = (details.get("opening") or {}).get("job") or {}
     buyer    = details.get("buyer") or {}
+    buyer_info = buyer.get("info") or {}
+
     info     = opening.get("info") or {}
-    stats    = buyer.get("stats") or {}
-    location = buyer.get("location") or {}
+    stats    = buyer_info.get("stats") or {}
+    location = buyer_info.get("location") or {}
     ext      = opening.get("extendedBudgetInfo") or {}
 
     # Title

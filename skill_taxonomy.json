@@ -1010,5 +1010,15 @@
       "3d",
       "model"
     ]
+  },
+  "orange": {
+    "channel": "fruit",
+    "family": "software",
+    "aliases": [
+      "orange",
+      "ab",
+      "cd",
+      "de"
+    ]
   }
 }

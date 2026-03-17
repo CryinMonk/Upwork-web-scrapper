@@ -38,9 +38,13 @@ def time_ago(timestamp_str) -> str:
 
 
 def format_budget(details: dict) -> str:
-    """Budget string derived entirely from details (jobPubDetails payload)."""
+    """
+    Budget string derived from details (jobAuthDetails payload).
+
+    API structure: details["opening"]["job"] holds budget/type data.
+    """
     try:
-        opening  = details.get("opening") or {}
+        opening  = (details.get("opening") or {}).get("job") or {}
         info     = opening.get("info") or {}
         job_type = info.get("type", "")
         ext      = opening.get("extendedBudgetInfo") or {}
@@ -74,10 +78,13 @@ def format_client_info(buyer: dict) -> str:
     """
     Payment verification: inferred from totalCharges > 0.
     Upwork requires a verified payment method before any charge can occur.
+
+    API structure: buyer["info"] holds location, stats, company.
     """
     try:
-        location    = buyer.get("location") or {}
-        stats       = buyer.get("stats") or {}
+        buyer_info  = buyer.get("info") or {}
+        location    = buyer_info.get("location") or {}
+        stats       = buyer_info.get("stats") or {}
         charges     = stats.get("totalCharges") or {}
         total_spent = float((charges.get("amount") if isinstance(charges, dict) else charges) or 0)
 
@@ -97,10 +104,13 @@ def format_client_info(buyer: dict) -> str:
 def build_embed(details: dict) -> discord.Embed:
     """
     Summary embed for the channel feed.
-    Built entirely from the details (jobPubDetails) payload — no search data needed.
+
+    API structure:
+      details["opening"]["job"]  — job fields
+      details["buyer"]["info"]   — client stats/location
     """
     try:
-        opening    = details.get("opening") or {}
+        opening    = (details.get("opening") or {}).get("job") or {}
         buyer      = details.get("buyer") or {}
         info       = opening.get("info") or {}
         ciphertext = details.get("_ciphertext") or info.get("ciphertext", "")

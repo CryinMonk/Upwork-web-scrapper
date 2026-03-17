@@ -1,17 +1,26 @@
 import logging
 import json
-from utilties.json_helper import get_json
+
 from curl_cffi import requests
 from curl_cffi import CurlError
+
 from database.database import is_job_posted
 from .graphql_payloads import SEARCH_IDS_QUERY, DETAILS_QUERY
 from database.database import log
-
+import os as _os
 
 GRAPHQL_URL = "https://www.upwork.com/api/graphql/v1"
 
+CONFIG_FILE = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "config.json")
+CONFIG_FILE = _os.path.normpath(CONFIG_FILE)
+
+
 _session = requests.Session(impersonate="chrome")
-logger   = logging.getLogger("fetchdata")
+_session.cookies.clear()
+
+logger = logging.getLogger("fetchdata")
+
+_AUTH_TOKEN_KEYS = ("oauth2_global_js_token", "master_access_token")
 
 
 class AuthExpiredError(Exception):
@@ -22,38 +31,39 @@ def _log(level: str, message: str):
     log(level, "fetchdata", message)
 
 
-def _prepare_request(referer: str) -> tuple[dict, dict]:
-    """Load cookies and build headers for a GraphQL request."""
-    cookies = get_json()["COOKIES"]
-    token   = next(
-        (cookies[n] for n in ("UniversalSearchNuxt_vt", "visitor_gql_token", "oauth2_global_js_token")
-         if cookies.get(n)),
-        None,
+def _load_config() -> tuple[dict, dict]:
+    """
+    Load cookies and headers exactly as saved by browser_session.py.
+    No reconstruction, no overrides — used verbatim.
+    Raises AuthExpiredError if auth cookies are missing.
+    """
+    with open(CONFIG_FILE) as f:
+        data = json.load(f)
+
+    cookies: dict = data.get("COOKIES") or {}
+    headers: dict = data.get("HEADERS") or {}
+
+    token_key = next((k for k in _AUTH_TOKEN_KEYS if cookies.get(k)), None)
+    if not token_key:
+        raise AuthExpiredError(
+            "No auth token found in config (oauth2_global_js_token / master_access_token). "
+            "Re-login required."
+        )
+
+    logger.info(
+        f"[_load_config] path={CONFIG_FILE!r}  "
+        f"auth_key={token_key!r}  token_prefix={cookies[token_key][:20]!r}  "
+        f"authorization_header={headers.get('authorization', 'MISSING')[:40]!r}  "
+        f"tenant_id={headers.get('x-upwork-api-tenantid', 'MISSING')!r}  "
+        f"total_cookies={len(cookies)}  total_headers={len(headers)}"
     )
-    headers = {
-        "accept":                   "*/*",
-        "accept-language":          "en-US,en;q=0.9",
-        "authorization":            f"bearer {token}" if token else "",
-        "content-type":             "application/json",
-        "origin":                   "https://www.upwork.com",
-        "priority":                 "u=1, i",
-        "referer":                  referer,
-        "sec-ch-ua":                '"Chromium";v="145", "Not:A-Brand";v="99"',
-        "sec-ch-ua-mobile":         "?0",
-        "sec-ch-ua-platform":       '"Linux"',
-        "sec-fetch-dest":           "empty",
-        "sec-fetch-mode":           "cors",
-        "sec-fetch-site":           "same-origin",
-        "user-agent":               "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                                    "(KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-        "x-upwork-accept-language": "en-US",
-    }
-    if xsrf := cookies.get("XSRF-TOKEN"):
-        headers["x-xsrf-token"] = xsrf
+
     return cookies, headers
 
 
-def _graphql_post(cookies, headers, payload, params, label="graphql"):
+def _graphql_post(cookies: dict, headers: dict, payload: dict, params: dict, label: str = "graphql"):
+    # Clear session cookies so only the freshly-loaded disk cookies are sent
+    _session.cookies.clear()
     try:
         response = _session.post(
             GRAPHQL_URL,
@@ -69,9 +79,10 @@ def _graphql_post(cookies, headers, payload, params, label="graphql"):
         raise
 
     if response.status_code in (401, 403):
-        msg = f"[{label}] Auth expired (HTTP {response.status_code})."
+        body = response.text[:500] if response.text else "(empty body)"
+        msg = f"[{label}] Auth expired (HTTP {response.status_code}) — re-login required. Body: {body}"
         logger.warning(msg); _log("WARNING", msg)
-        raise AuthExpiredError(msg)
+        raise AuthExpiredError(f"[{label}] Auth expired (HTTP {response.status_code}) — re-login required.")
 
     if response.status_code != 200:
         msg = f"[{label}] Unexpected status {response.status_code}: {response.text[:300]}"
@@ -92,6 +103,12 @@ def _parse_graphql_response(response, label: str) -> dict | None:
 
     if "errors" in data:
         err_msg = data["errors"][0].get("message", "") if data["errors"] else ""
+
+        if any(kw in err_msg.lower() for kw in ("unauthorized", "unauthenticated", "forbidden")):
+            msg = f"[{label}] GraphQL auth error: {err_msg}"
+            logger.warning(msg); _log("WARNING", msg)
+            raise AuthExpiredError(msg)
+
         msg = f"[{label}] GraphQL error: {err_msg}"
         logger.warning(msg); _log("WARNING", msg)
         if "data" not in data:
@@ -102,20 +119,19 @@ def _parse_graphql_response(response, label: str) -> dict | None:
 
 def fetch_new_ciphertexts(query: str, count: int = 10, offset: int = 0) -> list[str]:
     """
-    Lightweight search — fetches ciphertexts only, then filters out already-posted jobs.
-    Returns only the ciphertexts that are new and need detail fetching.
+    Lightweight authenticated search — fetches ciphertexts only, then filters
+    out already-posted jobs. Returns only ciphertexts that need detail fetching.
     """
-    cookies, headers = _prepare_request(
-        referer=f"https://www.upwork.com/nx/search/jobs/?q={query}",
-    )
+    cookies, headers = _load_config()
+
     payload = {
         "query": SEARCH_IDS_QUERY,
         "variables": {
             "requestVariables": {
                 "userQuery": query,
-                "sort": "recency+desc",
+                "sort":      "recency",
                 "highlight": False,
-                "paging": {"offset": offset, "count": count},
+                "paging":    {"offset": offset, "count": count},
             },
         },
     }
@@ -123,7 +139,7 @@ def fetch_new_ciphertexts(query: str, count: int = 10, offset: int = 0) -> list[
     try:
         response = _graphql_post(
             cookies, headers, payload,
-            {"alias": "visitorJobSearch"},
+            {"alias": "userJobSearch"},
             label=f"fetch_new_ciphertexts:{query}",
         )
     except CurlError:
@@ -134,7 +150,7 @@ def fetch_new_ciphertexts(query: str, count: int = 10, offset: int = 0) -> list[
         return []
 
     try:
-        search_root = data["data"]["search"]["universalSearchNuxt"]["visitorJobSearchV1"]
+        search_root = data["data"]["search"]["universalSearchNuxt"]["userJobSearchV1"]
         results     = search_root["results"]
         total       = search_root["paging"]["total"]
     except (KeyError, TypeError) as e:
@@ -142,10 +158,9 @@ def fetch_new_ciphertexts(query: str, count: int = 10, offset: int = 0) -> list[
         logger.error(msg); _log("ERROR", msg)
         return []
 
-    # Extract ciphertexts and drop already-posted jobs immediately
     all_ciphertexts = [
         ct for r in results
-        if (ct := (r.get("jobTile") or {}).get("job", {}).get("ciphertext"))
+        if (ct := (r.get("jobTile") or {}).get("job", {}).get("cipherText"))
     ]
     new_ciphertexts = [ct for ct in all_ciphertexts if not is_job_posted(ct)]
 
@@ -159,18 +174,21 @@ def fetch_new_ciphertexts(query: str, count: int = 10, offset: int = 0) -> list[
 
 
 def fetch_job_details(ciphertext: str) -> dict:
-    """Fetch full details for a single job by ciphertext."""
-    cookies, headers = _prepare_request(
-        referer="https://www.upwork.com/nx/search/jobs/",
-    )
+    """Fetch full details for a single job by ciphertext (authenticated)."""
+    cookies, headers = _load_config()
+
     payload = {
         "query": DETAILS_QUERY,
-        "variables": {"id": ciphertext},
+        "variables": {
+            "id":                   ciphertext,
+            # "isFreelancerOrAgency": True,
+            "isLoggedIn":           True,
+        },
     }
 
     response = _graphql_post(
         cookies, headers, payload,
-        {"alias": "gql-query-get-visitor-job-details"},
+        {"alias": "gql-query-get-auth-job-details"},
         label=f"fetch_job_details:{ciphertext}",
     )
 
@@ -179,7 +197,7 @@ def fetch_job_details(ciphertext: str) -> dict:
         return {}
 
     try:
-        return data["data"]["jobPubDetails"] or {}
+        return data["data"]["jobAuthDetails"] or {}
     except (KeyError, TypeError) as e:
         msg = f"[fetch_job_details] Unexpected response shape for {ciphertext}: {e}"
         logger.error(msg); _log("ERROR", msg)
@@ -189,10 +207,10 @@ def fetch_job_details(ciphertext: str) -> dict:
 
 def fetch_jobs_with_details(query: str, count: int = 10) -> list[dict]:
     """
-    1. Fetch ciphertexts only (lightweight search request)
-    2. Drop already-posted jobs via DB check
-    3. Fetch full details for new jobs only
-    4. Return list of detail dicts — each has _ciphertext attached for the caller
+    1. Fetch ciphertexts only (lightweight authenticated search request).
+    2. Drop already-posted jobs via DB check.
+    3. Fetch full details for new jobs only.
+    4. Return list of detail dicts — each has _ciphertext attached for the caller.
     """
     new_ciphertexts = fetch_new_ciphertexts(query=query, count=count)
 
@@ -203,14 +221,13 @@ def fetch_jobs_with_details(query: str, count: int = 10) -> list[dict]:
         try:
             details = fetch_job_details(ciphertext)
         except (AuthExpiredError, CurlError):
-            raise  # Re-raise so discordbot can handle auth refresh
+            raise
 
         if not details:
-            msg = f"[fetch_jobs_with_details] Some of the required details for '{ciphertext}' are missing"
+            msg = f"[fetch_jobs_with_details] No details returned for '{ciphertext}'"
             logger.warning(msg); _log("WARNING", msg)
             continue
 
-        # Attach ciphertext so callers don't need to track it separately
         details["_ciphertext"] = ciphertext
         enriched.append(details)
 

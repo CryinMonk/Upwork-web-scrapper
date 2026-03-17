@@ -138,6 +138,35 @@ async def _refresh_cf_if_due() -> None:
         logger.warning(msg); _log("WARNING", msg)
 
 
+# Tracks whether we already did a browser re-login this scraper cycle.
+# Reset to False at the start of each cycle in job_scraper_loop.
+_auth_refreshed_this_cycle: bool = False
+
+
+async def _ensure_auth_refreshed() -> bool:
+    """
+    Perform a browser re-login at most ONCE per scraper cycle.
+    Returns True if cookies are now fresh, False if the refresh failed.
+    """
+    global _auth_refreshed_this_cycle
+    if _auth_refreshed_this_cycle:
+        # Already refreshed this cycle — don't launch another browser.
+        logger.info("[Scraper] Auth already refreshed this cycle, skipping redundant re-login.")
+        return True  # optimistic: let the caller try with current cookies
+    msg = "[Scraper] Auth expired — running one-time browser re-login for this cycle..."
+    logger.warning(msg); _log("WARNING", msg)
+    ok = await refresh_browser_cookies()
+    if ok:
+        _auth_refreshed_this_cycle = True
+        bot.last_refresh_time = datetime.now(tz=timezone.utc)
+        logger.info("[Scraper] Browser re-login succeeded.")
+        _log("INFO", "[Scraper] Browser re-login succeeded.")
+    else:
+        msg = "[Scraper] Browser re-login failed — will skip remaining keywords this cycle."
+        logger.error(msg); _log("ERROR", msg)
+    return ok
+
+
 async def _fetch_with_auth_retry(keyword: str) -> list[dict] | None:
     async def _fetch():
         return await asyncio.to_thread(fetch_jobs_with_details, query=keyword, count=10)
@@ -145,19 +174,17 @@ async def _fetch_with_auth_retry(keyword: str) -> list[dict] | None:
     try:
         return await with_retry(f"Fetch:{keyword}", _fetch)
     except AuthExpiredError:
-        msg = f"[Scraper] Auth expired fetching '{keyword}'. Running browser cookie refresh..."
-        logger.warning(msg); _log("WARNING", msg)
+        # Refresh at most once per cycle, then retry this keyword.
+        ok = await _ensure_auth_refreshed()
+        if not ok:
+            return None  # refresh failed; caller will skip remaining keywords
         try:
-            ok = await refresh_browser_cookies()
-            if not ok:
-                raise RuntimeError("Browser cookie harvest returned no cookies.")
-            bot.last_refresh_time = datetime.now(tz=timezone.utc)
             return await with_retry(f"Fetch:{keyword}:post-refresh", _fetch)
-        except (AuthExpiredError, RuntimeError, CurlError) as e:
-            msg = f"[Scraper] Still failing for '{keyword}' after browser refresh: {e}. Skipping."
+        except (AuthExpiredError, CurlError) as e:
+            msg = f"[Scraper] Still failing for '{keyword}' after re-login: {e}. Skipping."
             logger.error(msg); _log("ERROR", msg)
             return None
-    except (AuthExpiredError, RuntimeError, CurlError) as e:
+    except (CurlError, RuntimeError) as e:
         msg = f"[Scraper] Failed to fetch jobs for '{keyword}' after all retries: {e}."
         logger.error(msg); _log("ERROR", msg)
         return None
@@ -204,6 +231,9 @@ async def _post_job(channel: discord.TextChannel, job_id: str, details: dict) ->
 
 @tasks.loop(minutes=CHECK_INTERVAL)
 async def job_scraper_loop():
+    global _auth_refreshed_this_cycle
+    _auth_refreshed_this_cycle = False  # reset once per cycle
+
     await _do_housekeeping()
     await _refresh_cf_if_due()
 

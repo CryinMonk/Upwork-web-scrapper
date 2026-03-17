@@ -44,22 +44,26 @@ def _fmt_member_since(company: dict) -> str:
 
 def build_thread_embed(details: dict) -> list[discord.Embed]:
     """
-    Returns [embed1, embed2] built entirely from the details (jobPubDetails) payload.
+    Returns [embed1, embed2] built from the details (jobAuthDetails) payload.
       embed1 — full description
       embed2 — client details, job details, skills
-    Falls back to a single error embed on failure.
+
+    API structure:
+      details["opening"]["job"]   — job fields (info, description, budget, etc.)
+      details["buyer"]["info"]    — stats, location, company
     """
     try:
-        opening    = details.get("opening") or {}
+        opening    = (details.get("opening") or {}).get("job") or {}
         buyer      = details.get("buyer") or {}
-        stats      = buyer.get("stats") or {}
-        company    = buyer.get("company") or {}
-        location   = buyer.get("location") or {}
+        buyer_info = buyer.get("info") or {}
+        stats      = buyer_info.get("stats") or {}
+        company    = buyer_info.get("company") or {}
+        location   = buyer_info.get("location") or {}
         info       = opening.get("info") or {}
         ciphertext = details.get("_ciphertext") or info.get("ciphertext", "")
         job_url    = f"https://www.upwork.com/jobs/{ciphertext}" if ciphertext else "https://www.upwork.com"
 
-        # ── Embed 1: Full description ─────────────────────────────────────────
+        # ── Embed 1: Full description ──────────────────────────────────────
         full_desc = clean_text(opening.get("description") or "No description provided.")
         preview   = full_desc[:4000]
         if len(full_desc) > 4000:
@@ -72,13 +76,13 @@ def build_thread_embed(details: dict) -> list[discord.Embed]:
             url         = job_url,
         )
 
-        # ── Embed 2: Details ──────────────────────────────────────────────────
+        # ── Embed 2: Details ───────────────────────────────────────────────
         total_spent  = _fmt_spent(stats)
         hire_rate    = _fmt_hire_rate(stats)
         client_loc   = location.get("country") or "N/A"
         member_since = _fmt_member_since(company)
         hires_made   = stats.get("totalAssignments", "N/A")
-        jobs_open    = (buyer.get("jobs") or {}).get("openCount", "N/A")
+        jobs_open    = (buyer_info.get("jobs") or {}).get("openCount", "N/A")
 
         charges     = stats.get("totalCharges") or {}
         spent_float = float((charges.get("amount") if isinstance(charges, dict) else charges) or 0)
